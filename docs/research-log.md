@@ -181,5 +181,5 @@ Decisão: PoC de acesso pelo navegador concluída; continuar WebHID para investi
 ## 2026-11-02 — escopo restrito ao Rapoo MT760
 
 - O projeto deixou de ser um configurador genérico de teclado, mouse e headset. O escopo passa a ser exclusivamente o **mouse Rapoo MT760**, com foco no Linux, onde a fabricante não oferece suporte oficial.
-- O nome do projeto e do repositório passou de `kmh-project` para `rapoo-mouse`. README e documentos de arquitetura foram atualizados; identificadores internos existentes (`kmh-*`) permanecem no código e nos artefatos históricos para não invalidar capturas e testes.
+- O nome do projeto e do repositório passou de `kmh-project` para `rapoo-mouse`. README e documentos de arquitetura foram atualizados. Identificadores internos foram posteriormente renomeados; a captura `research/captures/mt760-rust-battery-error-20261101.json` preserva o comando original como evidência histórica.
 - A arquitetura compartilhada entre desktop e navegador continua válida, mas limitada ao MT760. Suporte a outras variantes da família exige pesquisa e validação próprias.

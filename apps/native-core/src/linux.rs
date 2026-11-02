@@ -217,7 +217,7 @@ mod tests {
     fn lock_prevents_overlapping_readers_and_is_released() {
         let _guard = PROCESS_TEST_LOCK.lock().unwrap();
         let dir = std::env::temp_dir();
-        let path = dir.join(format!("kmh-lock-test-{}", std::process::id()));
+        let path = dir.join(format!("rapoo-lock-test-{}", std::process::id()));
         fs::write(&path, b"").unwrap();
         let path_str = path.to_str().unwrap();
         let first = lock_receiver(path_str).unwrap();
@@ -253,8 +253,8 @@ mod tests {
     #[test]
     #[ignore = "teste físico interativo: exige receptor MT760 e permissão hidraw"]
     fn physical_disconnect_after_battery_reply() {
-        if std::env::var("KMH_PHYSICAL_DISCONNECT_TEST").as_deref() != Ok("1") {
-            panic!("Defina KMH_PHYSICAL_DISCONNECT_TEST=1 para executar o teste físico");
+        if std::env::var("RAPOO_PHYSICAL_DISCONNECT_TEST").as_deref() != Ok("1") {
+            panic!("Defina RAPOO_PHYSICAL_DISCONNECT_TEST=1 para executar o teste físico");
         }
         let mut first_reply_seen = false;
         let result = read_worker_observed(|request, response| {
@@ -285,7 +285,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let directory =
-            std::env::temp_dir().join(format!("kmh-node-test-{}-{nonce}", std::process::id()));
+            std::env::temp_dir().join(format!("rapoo-node-test-{}-{nonce}", std::process::id()));
         fs::create_dir(&directory).unwrap();
         let path = directory.join("receiver");
         let replacement = directory.join("replacement");
@@ -312,7 +312,7 @@ mod tests {
 }
 
 /// Run one HID read in a separate process. The host must dispatch WORKER_ARG to read_worker.
-pub const WORKER_ARG: &str = "--kmh-hid-worker";
+pub const WORKER_ARG: &str = "--rapoo-hid-worker";
 
 pub fn read_isolated() -> Result<serde_json::Value, String> {
     let mut command = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);

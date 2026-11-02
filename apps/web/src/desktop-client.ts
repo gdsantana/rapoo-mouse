@@ -17,7 +17,7 @@ export function createDesktopClient(invoke: Invoke, listen: Listen): DeviceClien
       return { readTelemetry: result.readTelemetry, writeDpi: false };
     },
     subscribe(listener) {
-      return listen('kmh-hid-changed', event => {
+      return listen('rapoo-hid-changed', event => {
         const payload = event.payload as Record<string, unknown> | null;
         if (!payload || !Number.isSafeInteger(payload.generation) || (payload.generation as number) < 0 || typeof payload.available !== 'boolean') {
           listener({ generation: Number.MAX_SAFE_INTEGER, available: false });

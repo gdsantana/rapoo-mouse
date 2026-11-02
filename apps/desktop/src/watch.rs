@@ -87,7 +87,7 @@ pub fn protected_read(
 pub fn start(app: AppHandle, state: Arc<WatchState>) -> Result<(), String> {
     let (tx, rx) = mpsc::sync_channel(1);
     std::thread::Builder::new()
-        .name("kmh-hid-watch".into())
+        .name("rapoo-hid-watch".into())
         .spawn(move || {
             let result = udev::MonitorBuilder::new()
                 .and_then(|builder| builder.match_subsystem("hidraw"))
@@ -130,7 +130,7 @@ pub fn start(app: AppHandle, state: Arc<WatchState>) -> Result<(), String> {
                         ) {
                             let generation = state.change();
                             let _ = app.emit(
-                                "kmh-hid-changed",
+                                "rapoo-hid-changed",
                                 serde_json::json!({"generation": generation, "available": true}),
                             );
                         }
@@ -141,7 +141,7 @@ pub fn start(app: AppHandle, state: Arc<WatchState>) -> Result<(), String> {
             if state.running.load(Ordering::SeqCst) {
                 let generation = state.change();
                 let _ = app.emit(
-                    "kmh-hid-changed",
+                    "rapoo-hid-changed",
                     serde_json::json!({"generation": generation, "available": false}),
                 );
             }

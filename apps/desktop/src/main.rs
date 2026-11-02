@@ -22,7 +22,7 @@ async fn read_mt760(
 ) -> Result<serde_json::Value, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        watch::protected_read(&state, kmh_native_core::linux::read_isolated)
+        watch::protected_read(&state, rapoo_native_core::linux::read_isolated)
     })
     .await
     .map_err(|error| format!("Falha no processo de leitura: {error}"))?
@@ -36,8 +36,8 @@ async fn read_mt760() -> Result<serde_json::Value, String> {
 
 fn main() {
     #[cfg(target_os = "linux")]
-    if std::env::args().skip(1).collect::<Vec<_>>() == [kmh_native_core::linux::WORKER_ARG] {
-        match kmh_native_core::linux::read_worker() {
+    if std::env::args().skip(1).collect::<Vec<_>>() == [rapoo_native_core::linux::WORKER_ARG] {
+        match rapoo_native_core::linux::read_worker() {
             Ok(snapshot) => println!("{snapshot}"),
             Err(error) => {
                 eprintln!("{error}");
@@ -61,7 +61,7 @@ fn main() {
     let app = builder
         .invoke_handler(tauri::generate_handler![read_mt760, get_capabilities])
         .build(tauri::generate_context!())
-        .expect("Falha ao executar o KMH Project");
+        .expect("Falha ao executar o Rapoo Mouse");
     app.run(|app, event| {
         #[cfg(target_os = "linux")]
         if matches!(event, tauri::RunEvent::Exit) {

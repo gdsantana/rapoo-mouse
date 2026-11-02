@@ -1,6 +1,6 @@
 #[cfg(target_os = "linux")]
 fn main() {
-    use kmh_native_core::linux::{read_isolated, read_worker, WORKER_ARG};
+    use rapoo_native_core::linux::{read_isolated, read_worker, WORKER_ARG};
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == [WORKER_ARG] {
         match read_worker() {
@@ -13,7 +13,7 @@ fn main() {
         return;
     }
     if args != ["--read"] {
-        eprintln!("Uso: kmh-native-core --read");
+        eprintln!("Uso: rapoo-native-core --read");
         std::process::exit(2);
     }
     match read_isolated() {

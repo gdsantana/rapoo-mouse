@@ -25,7 +25,7 @@ test('desktop listener validates events and disposes the underlying subscription
   let callback: ((event: { payload: unknown }) => void) | undefined;
   let stopped = false;
   const client = createDesktopClient(async () => null, async (name, cb) => {
-    assert.equal(name, 'kmh-hid-changed');
+    assert.equal(name, 'rapoo-hid-changed');
     callback = cb;
     return () => { stopped = true; };
   });

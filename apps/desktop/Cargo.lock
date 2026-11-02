@@ -1671,28 +1671,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kmh-desktop"
-version = "0.1.0"
-dependencies = [
- "kmh-native-core",
- "libc",
- "serde_json",
- "tauri",
- "tauri-build",
- "udev",
- "uuid",
-]
-
-[[package]]
-name = "kmh-native-core"
-version = "0.1.0"
-dependencies = [
- "hidapi",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "libappindicator"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2418,6 +2396,28 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "rapoo-desktop"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "rapoo-native-core",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "udev",
+ "uuid",
+]
+
+[[package]]
+name = "rapoo-native-core"
+version = "0.1.0"
+dependencies = [
+ "hidapi",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "raw-window-handle"
