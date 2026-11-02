@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Permite à janela principal observar mudanças HID.",
+  "windows": ["main"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

@@ -48,8 +48,8 @@ def packet(plan, restore=False):
     return (bytes.fromhex('ba a5 a5 10 38 06 00 00') + data).ljust(32, b'\0')
 
 
-def stable_snapshot():
-    a, b = BRIDGE['read_snapshot'](), BRIDGE['read_snapshot']()
+def stable_snapshot(lock):
+    a, b = BRIDGE['_read_snapshot'](lock), BRIDGE['_read_snapshot'](lock)
     if a['rawResponses']['dpi-list'] != b['rawResponses']['dpi-list'] or a['rawResponses']['polling-rate'] != b['rawResponses']['polling-rate']:
         raise RuntimeError('Configuração instável; nenhuma gravação deve ser iniciada.')
     return b
@@ -73,10 +73,17 @@ def save(path, plan):
     temporary.replace(path)
 
 
-def write_worker(plan, restore):
+def write_worker(plan, restore, lock):
+    locked = os.fstat(lock.fd)
+    if (locked.st_dev, locked.st_ino) != lock.identity:
+        raise RuntimeError('Bloqueio não corresponde ao receptor; nenhuma gravação enviada.')
+    fcntl.flock(lock.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     path = READ['device_path']()
     fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
     try:
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != lock.identity:
+            raise RuntimeError('Receptor mudou antes da gravação; nenhuma gravação enviada.')
         info = bytearray(8)
         fcntl.ioctl(fd, 0x80084803, info, True)
         if struct.unpack('IHH', info) != (3, 0x24AE, 0x1870):
@@ -97,13 +104,14 @@ def write_worker(plan, restore):
         os.close(fd)
 
 
-def write_once(path, plan, restore):
+def write_once(path, plan, restore, lock):
     event = {'startedAt': stamp(), 'operation': 'restore' if restore else 'apply-test', 'requestHex': packet(plan, restore).hex()}
     plan['events'].append(event)
     save(path, plan)  # Persist the original and intended write before touching hardware.
     try:
-        result = subprocess.run([sys.executable, __file__, 'worker-restore' if restore else 'worker-apply', str(path)],
-                                capture_output=True, text=True, timeout=8)
+        result = subprocess.run([sys.executable, __file__, 'worker-restore' if restore else 'worker-apply', str(path),
+                                 '--lock-fd', str(lock.fd), '--lock-device', str(lock.identity[0]), '--lock-inode', str(lock.identity[1])],
+                                capture_output=True, text=True, timeout=8, pass_fds=(lock.fd,))
         event.update(exitCode=result.returncode, output=result.stdout, error=result.stderr)
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or 'Falha na gravação.')
@@ -115,14 +123,14 @@ def write_once(path, plan, restore):
         save(path, plan)
 
 
-def restore_original(path, plan):
-    current = stable_snapshot()
+def restore_original(path, plan, lock):
+    current = stable_snapshot(lock)
     try:
         check_state(plan, current, True)
     except RuntimeError:
         check_state(plan, current)
-        write_once(path, plan, True)
-    restored = stable_snapshot()
+        write_once(path, plan, True, lock)
+    restored = stable_snapshot(lock)
     check_state(plan, restored, True)
     plan['restored'] = restored
     save(path, plan)
@@ -132,10 +140,28 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=('prepare', 'apply-test', 'verify-after-power-cycle', 'restore', 'worker-apply', 'worker-restore'))
     parser.add_argument('evidence', nargs='?')
+    parser.add_argument('--lock-fd', type=int)
+    parser.add_argument('--lock-device', type=int)
+    parser.add_argument('--lock-inode', type=int)
     args = parser.parse_args()
+    if args.mode.startswith('worker-'):
+        if not args.evidence or any(value is None for value in (args.lock_fd, args.lock_device, args.lock_inode)):
+            parser.error('O processo de gravação exige o bloqueio herdado do processo supervisor.')
+        path = Path(args.evidence).resolve()
+        if path.parent != CAPTURES or not path.name.startswith('mt760-dpi-write-') or path.suffix != '.json':
+            raise ValueError('O backup deve estar no diretório de capturas deste projeto.')
+        plan = json.loads(path.read_text())
+        original(plan)
+        write_worker(plan, args.mode == 'worker-restore', READ['ReceiverLock']((args.lock_device, args.lock_inode), args.lock_fd))
+        return
+    with READ['receiver_lock']() as lock:
+        execute(args, parser, lock)
+
+
+def execute(args, parser, lock):
     if args.mode == 'prepare':
         plan = {'kind': 'mt760-inactive-dpi-test-v1', 'createdAt': stamp(),
-                'descriptorSha256': READ['DESCRIPTOR_SHA256'], 'before': stable_snapshot(), 'events': []}
+                'descriptorSha256': READ['DESCRIPTOR_SHA256'], 'before': stable_snapshot(lock), 'events': []}
         original(plan)
         path = CAPTURES / ('mt760-dpi-write-' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.json')
         save(path, plan)
@@ -148,31 +174,28 @@ def main():
         raise ValueError('O backup deve estar no diretório de capturas deste projeto.')
     plan = json.loads(path.read_text())
     original(plan)
-    if args.mode.startswith('worker-'):
-        write_worker(plan, args.mode == 'worker-restore')
-        return
     if args.mode == 'apply-test':
         if any(event.get('operation') == 'apply-test' for event in plan['events']):
             raise ValueError('Este backup já possui uma tentativa; não repetir a gravação automaticamente.')
-        check_state(plan, stable_snapshot(), True)
+        check_state(plan, stable_snapshot(lock), True)
         try:
-            write_once(path, plan, False)
-            plan['after'] = stable_snapshot()
+            write_once(path, plan, False, lock)
+            plan['after'] = stable_snapshot(lock)
             check_state(plan, plan['after'])
             save(path, plan)
         except Exception as error:
             plan['applyError'] = str(error)
             save(path, plan)
             try:
-                restore_original(path, plan)
+                restore_original(path, plan, lock)
             except Exception as recovery_error:
                 plan['recoveryError'] = str(recovery_error)
                 save(path, plan)
             raise
     elif args.mode == 'restore':
-        restore_original(path, plan)
+        restore_original(path, plan, lock)
     else:
-        plan['afterPowerCycle'] = stable_snapshot()
+        plan['afterPowerCycle'] = stable_snapshot(lock)
         save(path, plan)
         check_state(plan, plan['afterPowerCycle'])
         plan['powerCycleVerificationRequestedAt'] = stamp()

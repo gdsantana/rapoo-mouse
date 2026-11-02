@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rapoo Mouse",
+  "version": "0.1.0",
+  "identifier": "com.rapoomouse.desktop",
+  "build": {
+    "frontendDist": "../web/dist-desktop"
+  },
+  "app": {
+    "windows": [{ "title": "Rapoo Mouse", "width": 1050, "height": 760 }],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": { "active": false }
+}

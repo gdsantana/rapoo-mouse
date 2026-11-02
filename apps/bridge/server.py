@@ -1,5 +1,6 @@
 """Loopback-only bridge for fixed, observed MT760 read queries."""
 import datetime
+import importlib.util
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -10,6 +11,9 @@ import threading
 
 ROOT = Path(__file__).resolve().parents[2]
 DIAGNOSTIC = ROOT / "research/experiments/read-mt760.py"
+DIAGNOSTIC_SPEC = importlib.util.spec_from_file_location("mt760_diagnostic", DIAGNOSTIC)
+diagnostic = importlib.util.module_from_spec(DIAGNOSTIC_SPEC)
+DIAGNOSTIC_SPEC.loader.exec_module(diagnostic)
 ORIGINS = {"http://127.0.0.1:5174", "http://localhost:5174", "http://127.0.0.1:4173", "http://localhost:4173"}
 READ_LOCK = threading.Lock()
 
@@ -37,10 +41,15 @@ def decode_polling(polling, dpi):
 
 
 def read_snapshot():
+    with diagnostic.receiver_lock() as lock:
+        return _read_snapshot(lock)
+
+
+def _read_snapshot(lock):
     replies = {}
     for name in ("battery", "dpi-list", "polling-rate"):
-        result = subprocess.run([sys.executable, str(DIAGNOSTIC), "--worker", name],
-                                capture_output=True, text=True, timeout=8)
+        result = subprocess.run([sys.executable, str(DIAGNOSTIC), "--worker", name, *map(str, lock.identity)],
+                                capture_output=True, text=True, timeout=8, pass_fds=(lock.fd,))
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or "Falha na leitura do receptor.")
         reply = json.loads(result.stdout.splitlines()[-1])
@@ -48,7 +57,7 @@ def read_snapshot():
         if reply["query"] != name or reply["ioctlReturn"] != expected:
             raise ValueError("Resposta incompatível com a consulta; leitura descartada.")
         replies[name] = bytes.fromhex(reply["responseHex"])[:expected]
-    # shortcut: same-sized stale replies from another HID client cannot be correlated; keep one reader active until the protocol exposes an identifier.
+    # shortcut: external HID clients can ignore the cooperative lock and same-sized stale replies cannot be correlated.
     return {"source": "linux-hidraw", "experimental": True, "vendorId": 0x24AE, "productId": 0x1870,
             "capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             **decode(replies["battery"], replies["dpi-list"]),

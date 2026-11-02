@@ -1,6 +1,8 @@
-# Retomada do projeto: leitura de bateria e DPI do MT760
+# Rapoo Mouse: retomada da leitura de bateria e DPI do MT760
 
-Registro de continuidade em **2026-10-16**, atualizado em **2026-10-17**, horário de referência America/Sao_Paulo.
+Registro de continuidade em **2026-10-16**, atualizado em **2026-10-17** e revisado em **2026-11-02**, horário de referência America/Sao_Paulo.
+
+O projeto **Rapoo Mouse** tem escopo restrito ao mouse **Rapoo MT760** no Linux.
 
 Atualização de 2026-10-17: o painel também lê o **polling rate configurado**, usando A4/0x630, byte wireless no offset 5. Foram obtidos 1000 Hz e o usuário confirmou esse valor na página. [Descoberta, captura e limites](../research/software-analysis/polling-rate.md). As capturas de 59%/1350 DPI abaixo são o histórico inicial; a captura posterior da ponte trouxe 54%/1350 DPI/1000 Hz.
 
@@ -145,7 +147,7 @@ Os testes automatizados usam mocks e capturas preservadas; não substituem nova 
 ## Pendências para a próxima sessão
 
 1. Validar desconexão/reconexão física e repouso/despertar do mouse, preservando respostas brutas e erros. Confirmar reidentificação do nó e comportamento da ACL.
-2. Investigar correlação de transações. Sem identificador conhecido, uma resposta antiga de mesmo tamanho produzida por outro cliente HID pode ser aceita. O lock protege apenas os pedidos desta ponte; manter um único leitor HID ativo.
+2. Investigar correlação de transações. Sem identificador conhecido, uma resposta antiga de mesmo tamanho pode ser aceita. Rust, ponte, captura e experimento de escrita usam bloqueio cooperativo; outros clientes não participam e devem ficar fechados. A alteração no experimento de escrita ainda não foi validada por uma nova gravação física.
 3. Comparar bateria e DPI com o software oficial e registrar firmware, sem Apply, pareamento ou atualização. O teste físico confirmou o seletor DPI, não a calibração de deslocamento por polegada nem a precisão do percentual.
 4. Validar carregamento e outros firmwares/modelos/conexões antes de ampliar a compatibilidade.
 5. Evoluir o primeiro experimento de escrita para uma configuração utilizável: a tabela DPI já foi alterada, persistiu após ciclo físico do conjunto e foi restaurada. Ver [procedimento e evidência](../research/experiments/write-dpi.md). Antes de expor escrita na UI, resolver concorrência, correlação de respostas e a recuperação diante de desconexão durante gravação.

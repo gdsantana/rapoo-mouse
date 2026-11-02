@@ -1,7 +1,8 @@
 {
-  "name": "kmh-project",
+  "name": "rapoo-mouse",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -11,6 +12,7 @@
     "bridge": "python3 apps/bridge/server.py",
     "dev": "npm run dev -w @rapoo/web",
     "build": "tsc --noEmit && npm run build -w @rapoo/web",
+    "build:desktop": "tsc --noEmit && npm run build:desktop -w @rapoo/web",
     "test": "node --experimental-strip-types --test tests/*.test.ts && python3 -m unittest discover -s tests -p '*_test.py'"
   },
   "devDependencies": {

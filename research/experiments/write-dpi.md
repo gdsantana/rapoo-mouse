@@ -50,7 +50,7 @@ Os dados contêm sete valores de 16 bits, quantidade habilitada menos 1 e reserv
 - Recusa repetir `apply-test` em um backup que já registra tentativa.
 - Se a aplicação falhar, tenta restaurar quando o estado ainda corresponde ao original ou ao teste. Diante de estado inesperado, registra o erro de recuperação e não sobrescreve configurações desconhecidas.
 
-A ponte é pausada durante todo o experimento para não disputar consultas. O lock HTTP da ponte não protege contra outros clientes externos: manter o configurador oficial e outros leitores fechados. O script é um experimento supervisionado, não uma interface de configuração pronta para uso geral.
+A ponte deve permanecer pausada durante todo o experimento. O supervisor de escrita mantém agora o mesmo bloqueio cooperativo do Rust e da ponte ao longo das leituras, gravação e verificação; o subprocesso de escrita herda esse bloqueio e verifica a identidade do nó antes de enviar. Essa alteração foi testada com simulações, mas ainda não foi validada por uma nova gravação física. Clientes externos podem ignorar o bloqueio: manter o configurador oficial e outros leitores fechados. O script é um experimento supervisionado, não uma interface de configuração pronta para uso geral.
 
 ## Procedimento reproduzível
 

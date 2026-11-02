@@ -1,10 +1,13 @@
 import contextlib
 import copy
+import fcntl
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import struct
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -28,6 +31,10 @@ def changed_snapshot(p):
     result['rawResponses']['polling-rate'] = polling.hex()
     result['dpiValues'][0] = 1050
     return result
+
+
+def fake_lock():
+    return contextlib.nullcontext(writer.READ['ReceiverLock']((1, 2), 42))
 
 
 class WriteDpiTests(unittest.TestCase):
@@ -64,7 +71,7 @@ class WriteDpiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'mt760-dpi-write-test.json'
             writer.save(path, p)
-            with patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', 'apply-test', str(path)]), \
+            with patch.dict(writer.READ, {'receiver_lock': fake_lock}), patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', 'apply-test', str(path)]), \
                  patch.object(writer, 'stable_snapshot', side_effect=[p['before'], changed_snapshot(p), p['before']]), \
                  patch.object(writer, 'write_once', side_effect=[RuntimeError('timeout'), None]) as send:
                 with self.assertRaisesRegex(RuntimeError, 'timeout'): writer.main()
@@ -79,7 +86,7 @@ class WriteDpiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'mt760-dpi-write-test.json'
             writer.save(path, p)
-            with patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', 'apply-test', str(path)]), \
+            with patch.dict(writer.READ, {'receiver_lock': fake_lock}), patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', 'apply-test', str(path)]), \
                  patch.object(writer, 'stable_snapshot', side_effect=[p['before'], unexpected]), \
                  patch.object(writer, 'write_once', side_effect=RuntimeError('timeout')) as send:
                 with self.assertRaisesRegex(RuntimeError, 'timeout'): writer.main()
@@ -91,10 +98,77 @@ class WriteDpiTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'mt760-dpi-write-test.json'
                 writer.save(path, plan())
-                with patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', mode, str(path)]), \
+                with patch.dict(writer.READ, {'receiver_lock': fake_lock}), patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', mode, str(path)]), \
                      patch.object(writer, 'stable_snapshot', side_effect=samples), patch.object(writer, 'write_once') as send, contextlib.redirect_stdout(io.StringIO()):
                     writer.main()
                     send.assert_not_called()
+
+    def test_write_worker_rejects_other_node_before_sending(self):
+        with tempfile.NamedTemporaryFile() as locked, tempfile.NamedTemporaryFile() as replacement:
+            locked_stat = os.fstat(locked.fileno())
+            lock = writer.READ['ReceiverLock']((locked_stat.st_dev, locked_stat.st_ino), locked.fileno())
+            with patch.dict(writer.READ, {'device_path': lambda: Path(replacement.name)}), patch.object(writer.os, 'write') as send:
+                with self.assertRaisesRegex(RuntimeError, 'nenhuma gravação enviada'):
+                    writer.write_worker(plan(), False, lock)
+                send.assert_not_called()
+
+    def test_internal_worker_requires_inherited_lock(self):
+        with patch.object(writer.sys, 'argv', ['script', 'worker-apply', 'unused']), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            writer.main()
+
+    def test_intent_is_persisted_before_spawning_locked_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'evidence.json'
+            p = plan()
+            lock = writer.READ['ReceiverLock']((1, 2), 42)
+            def run(args, **kwargs):
+                recorded = json.loads(path.read_text())['events'][-1]
+                self.assertEqual(recorded['operation'], 'apply-test')
+                self.assertEqual(recorded['requestHex'], writer.packet(p).hex())
+                self.assertEqual(kwargs['pass_fds'], (42,))
+                self.assertEqual(args[-6:], ['--lock-fd', '42', '--lock-device', '1', '--lock-inode', '2'])
+                return subprocess.CompletedProcess(args, 0, '', '')
+            with patch.object(writer.subprocess, 'run', side_effect=run):
+                writer.write_once(path, p, False, lock)
+
+    def test_snapshots_reuse_lock_for_whole_operation(self):
+        lock = writer.READ['ReceiverLock']((1, 2), 42)
+        with patch.dict(writer.BRIDGE, {'_read_snapshot': unittest.mock.Mock(return_value=plan()['before'])}):
+            writer.stable_snapshot(lock)
+            self.assertEqual(writer.BRIDGE['_read_snapshot'].call_count, 2)
+            self.assertTrue(all(call.args == (lock,) for call in writer.BRIDGE['_read_snapshot'].call_args_list))
+
+    def test_occupied_receiver_prevents_writes(self):
+        with patch.dict(writer.READ, {'receiver_lock': unittest.mock.Mock(side_effect=RuntimeError('ocupado'))}), \
+             patch.object(writer.sys, 'argv', ['script', 'apply-test', 'unused']), patch.object(writer, 'write_once') as send:
+            with self.assertRaisesRegex(RuntimeError, 'ocupado'):
+                writer.main()
+            send.assert_not_called()
+
+    def test_lock_covers_reads_write_and_verification(self):
+        p = plan()
+        with tempfile.TemporaryDirectory() as directory:
+            receiver = Path(directory) / 'receiver'
+            receiver.touch()
+            path = Path(directory) / 'mt760-dpi-write-test.json'
+            writer.save(path, p)
+            def check_locked():
+                with receiver.open('rb') as other:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            samples = iter([p['before'], changed_snapshot(p)])
+            def snapshot(lock):
+                check_locked()
+                return next(samples)
+            def write_once(path, plan, restore, lock):
+                check_locked()
+            with patch.dict(writer.READ['receiver_lock'].__wrapped__.__globals__, {'device_path': lambda: receiver}), \
+                 patch.object(writer, 'CAPTURES', Path(directory)), patch.object(writer.sys, 'argv', ['script', 'apply-test', str(path)]), \
+                 patch.object(writer, 'stable_snapshot', side_effect=snapshot), patch.object(writer, 'write_once', side_effect=write_once), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                writer.main()
+            with receiver.open('rb') as other:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 if __name__ == '__main__':

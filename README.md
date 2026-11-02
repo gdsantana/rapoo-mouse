@@ -1,23 +1,23 @@
-# KMH Project
+# Rapoo Mouse
 
-**Keyboard · Mouse · Headphone**
+**Rapoo MT760 · Linux**
 
-Projeto independente para investigar protocolos e desenvolver ferramentas locais de leitura e configuração de **teclados, mouses e fones de ouvido/headsets**. O suporte a cada dispositivo será baseado em descritores, capturas e testes físicos, com compatibilidade documentada.
+Ferramenta independente, local-first, para investigar o protocolo e desenvolver leitura e configuração do **mouse Rapoo MT760** no Linux. O suporte é baseado em descritores, capturas e testes físicos, com compatibilidade documentada. O foco é o MT760 conectado pelo receptor 2,4 GHz: a fabricante não oferece suporte oficial a outros sistemas operacionais, e este projeto cobre essa lacuna.
 
-A implementação atual é uma PoC de leitura do **mouse Rapoo MT760 via receptor 2,4 GHz**: inspeção WebHID e bateria/DPI/polling rate recebidos no navegador por uma ponte Python Linux. Teclados e fones de ouvido fazem parte do escopo de evolução e ainda não possuem suporte implementado. A interface atual continua dedicada ao experimento MT760.
+A implementação atual é uma PoC de leitura do mouse: inspeção WebHID e bateria/DPI/polling rate recebidos no navegador por uma ponte Python Linux.
 
 React + TypeScript + Vite em um workspace npm. Sem conta ou serviço externo. O painel e a ponte HTTP são somente de leitura; há um experimento separado e supervisionado de gravação da tabela DPI.
 
-Repositório: [gdsantana/kmh-project](https://github.com/gdsantana/kmh-project). O nome anterior era `rappo-mouse`.
+Repositório: [gdsantana/rapoo-mouse](https://github.com/gdsantana/rapoo-mouse). O nome anterior era `kmh-project`.
 
 **Para continuar em outra sessão:** leia o [registro de retomada de bateria e DPI](docs/retomada-dpi-bateria.md), com o processo de descoberta, execução, arquivos relevantes, evidências e pendências.
 
 ## Arquitetura proposta: desktop e navegador
 
-A evolução planejada usa front React/TypeScript e núcleo Rust residente, integrados pelo Tauri 2. O núcleo monitorará os dispositivos e emitirá notificações mesmo com a janela oculta. O front terá um contrato de comunicação compartilhado, com cliente IPC no desktop e cliente WebHID para operações compatíveis no navegador, sem núcleo instalado. A comunicação direta do site com o MT760 ainda depende de pesquisa e validação. A implementação atual continua sendo a PoC descrita abaixo.
+A evolução planejada usa front React/TypeScript e núcleo Rust residente, integrados pelo Tauri 2. O núcleo monitorará o mouse e emitirá notificações mesmo com a janela oculta. O front terá um contrato de comunicação compartilhado, com cliente IPC no desktop e cliente WebHID para operações compatíveis no navegador, sem núcleo instalado. A comunicação direta do site com o MT760 ainda depende de pesquisa e validação. A implementação atual continua sendo a PoC descrita abaixo.
 
 - [Arquitetura geral](docs/arquitetura-geral.md): os dois blocos, responsabilidades e comunicação.
-- [Arquitetura do núcleo](docs/arquitetura-nucleo.md): sistema operacional, identificação e monitoramento de periféricos, consultas, configurações e notificações.
+- [Arquitetura do núcleo](docs/arquitetura-nucleo.md): sistema operacional, identificação e monitoramento do mouse, consultas, configurações e notificações.
 - [Arquitetura do front](docs/arquitetura-front.md): interface compartilhada, clientes IPC/WebHID, capacidades, sincronização e funcionamento em segundo plano.
 
 Os três documentos incluem diagramas de hierarquia e de fluxo em Mermaid.
@@ -29,8 +29,8 @@ Node.js **22.18+**, ou uma versão mais recente compatível com o Vite 8, e npm.
 Para uma nova cópia:
 
 ```sh
-git clone git@github.com:gdsantana/kmh-project.git
-cd kmh-project
+git clone git@github.com:gdsantana/rapoo-mouse.git
+cd rapoo-mouse
 ```
 
 Na pasta do projeto:
@@ -93,6 +93,7 @@ O preview fica em http://127.0.0.1:4173/. Testes usam descritores sintéticos e 
 
 - `apps/web`: interface e fluxo do experimento.
 - `apps/bridge`: ponte Linux local para as leituras de bateria e DPI do MT760.
+- `apps/native-core`: biblioteca e diagnóstico Rust experimental de leitura do MT760 no Linux. Identifica a interface pelo descritor, lê bateria, DPI e polling rate e imprime respostas brutas. A ponte permanece disponível; validar com `cargo test --manifest-path apps/native-core/Cargo.toml`.
 - `packages/core`: modelo de evidência e resumos dos descritores.
 - `packages/transport-webhid`: descoberta, abertura, inspeção e fechamento.
 - `packages/device-definitions`: identidade observada, sem alegar compatibilidade de protocolo.
@@ -101,7 +102,7 @@ O preview fica em http://127.0.0.1:4173/. Testes usam descritores sintéticos e 
 - `docs`: arquitetura, compatibilidade, protocolo e histórico.
 - `tests`: testes do transporte e transformação dos descritores.
 
-Há um diagnóstico nativo reutilizado pela ponte local de leitura. O [HANDOFF.MD](HANDOFF.MD) original preserva os objetivos da pesquisa inicial do MT760; o escopo geral do KMH Project agora inclui teclado, mouse e fones de ouvido. A pesquisa e as capturas específicas do Rapoo permanecem identificadas pelo dispositivo de origem.
+Há um diagnóstico nativo reutilizado pela ponte local de leitura. O [HANDOFF.MD](HANDOFF.MD) preserva os objetivos da pesquisa inicial do MT760. A pesquisa e as capturas permanecem identificadas pelo dispositivo de origem.
 
 ## Resultado verificado
 
@@ -116,6 +117,28 @@ O experimento Linux posterior, após permissão específica na interface `FF00/0
 **Esses dados agora chegam à página por uma ponte local Linux.** Em outro terminal, execute `npm run bridge`, mantenha `npm run dev` ativo e clique **Ler informações do mouse** em `http://127.0.0.1:5174/`. Requer Python 3 e permissão hidraw; não precisa de um novo seletor WebHID. A atualização é manual, e falhas removem os valores anteriores da tela. A ponte escuta somente em `127.0.0.1:5175` e aceita apenas as consultas fixas de leitura vindas das origens locais permitidas.
 
 O teste WebHID enviou a consulta sem erro, mas não recebeu evento BA em três segundos. A resposta veio por GET_REPORT(Input) nativo, justificando a ponte. Isso não altera a configuração do mouse.
+
+O diagnóstico Rust pode ser executado no Linux com `cargo run --manifest-path apps/native-core/Cargo.toml -- --read`. A compilação requer Rust, C, pkg-config e os arquivos de desenvolvimento da libudev. É uma leitura manual experimental: Rust, ponte, captura Python e experimento supervisionado de escrita usam um bloqueio cooperativo; outros clientes HID não participam e devem ficar fechados. A atualização do bloqueio no experimento de escrita foi testada com simulações, sem nova gravação física. A ferramenta tenta interromper o processo de leitura após oito segundos, mas não garante recuperação de uma chamada do kernel que não possa ser interrompida. Não há garantia de identificar respostas antigas de mesmo tamanho.
+
+O aplicativo desktop experimental usa a mesma leitura pelo IPC do Tauri, sem ponte HTTP. Para compilar no Linux, instale as dependências de desenvolvimento do Tauri, GTK 3, WebKitGTK 4.1 e libudev e execute:
+
+```sh
+npm ci
+npm run build:desktop
+cargo run --manifest-path apps/desktop/Cargo.toml
+```
+
+O app oferece leitura manual e observa experimentalmente eventos de conexão `hidraw` do Linux, sem consultar o mouse periodicamente. Qualquer adição ou remoção HID invalida a leitura exibida, inclusive de outro dispositivo; uma falha do observador bloqueia novas leituras. A remoção e a reconexão foram observadas em um teste físico entre leituras; desconexão durante consulta e perda de eventos ainda não foram validadas. O app cria sessões locais e revisões para ordenar leituras; esses identificadores são temporários, podem mudar por eventos de outros dispositivos e não identificam a unidade física. A exportação JSON inclui a sessão observada. O app não expõe configuração. A compilação do desktop fica separada de `npm run build`, destinado ao navegador.
+
+### Erro gráfico no Wayland com NVIDIA
+
+Se o app encerrar com `Error 71 (Protocol error) dispatching to Wayland display`, teste o executável com esta variável apenas para o processo:
+
+```sh
+__NV_DISABLE_EXPLICIT_SYNC=1 ./apps/desktop/target/debug/kmh-desktop
+```
+
+Essa alternativa abriu a janela na sessão NVIDIA testada. O problema e outras opções estão descritos na [documentação do Tauri para gráficos no Linux](https://v2.tauri.app/develop/debug/linux-graphics/); a causa exata pode variar entre ambientes.
 
 - [Processo completo e comandos para repetir](research/experiments/native-dpi-battery.md): identificação, ACL, pacotes, fórmulas, testes físicos e limitações.
 - [Como descobrimos o protocolo no driver oficial](research/software-analysis/dpi-battery.md): fontes, hashes, extração, rotinas e distinção entre hipóteses e resultados.
@@ -133,3 +156,11 @@ Leitura na página via ponte confirmada; WebHID puro não recebeu resposta no te
 Em 2026-10-17, o script separado [write-mt760-dpi.py](research/experiments/write-mt760-dpi.py) gravou o primeiro estágio inativo de 1000 para 1050 DPI. ACK e leituras estáveis confirmaram a alteração, preservando 1350 DPI ativos e 1000 Hz. O backup original é salvo antes do envio e há um comando de restauração com verificação. O painel e a API HTTP não expõem escrita.
 
 [Procedimento, rotina do driver, pacote e resultados](research/experiments/write-dpi.md). A alteração de teste sobreviveu ao ciclo de energia do mouse e receptor confirmado pelo usuário. Os 1000 DPI originais foram restaurados e conferidos por leitura; a ponte foi reativada. O JSON registra antes, depois, após reinício e restauração. A localização física do armazenamento permanece desconhecida, e não foi feito um novo ciclo após restaurar.
+
+## Licença
+
+Copyright (c) 2026 Guilherme Santana.
+
+Este projeto é distribuído sob a **PolyForm Noncommercial License 1.0.0**. O uso é gratuito para fins pessoais, de estudo, pesquisa, hobby e por organizações sem fins comerciais. **Uso comercial não é permitido** sem uma licença separada do titular dos direitos.
+
+O texto completo está em [LICENSE](LICENSE). Identificador SPDX: `PolyForm-Noncommercial-1.0.0`. Por restringir o uso comercial, este é um projeto **source-available**, não um software open source aprovado pela OSI.

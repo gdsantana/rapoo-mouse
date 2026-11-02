@@ -1,8 +1,8 @@
-# KMH Project — Arquitetura do núcleo
+# Rapoo Mouse — Arquitetura do núcleo
 
-**Status: proposta de implementação em Rust, atualizada em 2026-10-17.**
+**Status: proposta de implementação em Rust, atualizada em 2026-11-02.**
 
-O núcleo será responsável pelo hardware, pelo estado dos periféricos e pela integração com o sistema operacional. Deverá continuar funcionando com a janela oculta. A [arquitetura geral](arquitetura-geral.md) define os dois blocos e os identificadores comuns; a [arquitetura do front](arquitetura-front.md) descreve quem consome seus eventos.
+O núcleo será responsável pelo hardware do **mouse Rapoo MT760**, pelo estado do dispositivo e pela integração com o sistema operacional. Deverá continuar funcionando com a janela oculta. A [arquitetura geral](arquitetura-geral.md) define os dois blocos e os identificadores comuns; a [arquitetura do front](arquitetura-front.md) descreve quem consome seus eventos.
 
 ## Relação com o front compartilhado
 
@@ -19,11 +19,7 @@ flowchart TB
     Core --> Registry["Catálogo de protocolos e capacidades"]
     Core --> Manager["Gerenciador de sessões"]
     Manager --> Mouse["Sessão do mouse"]
-    Manager --> Keyboard["Sessão do teclado"]
-    Manager --> Headset["Sessão do headset"]
     Mouse --> Queue["Fila e estado por dispositivo"]
-    Keyboard --> Queue
-    Headset --> Queue
     Queue --> Coordinator["Coordenação por transporte físico"]
     Coordinator --> Protocol["Protocolo específico do modelo"]
     Protocol --> Transport["Adaptador HID ou API nativa"]
@@ -35,16 +31,16 @@ flowchart TB
 
 Os blocos são responsabilidades internas, não serviços de rede separados. Cada sessão tem sua própria fila e estado; o desenho agrupa essas filas apenas para simplificar a leitura. Dispositivos que compartilham receptor também compartilham uma coordenação de transporte, impedindo operações incompatíveis ao mesmo tempo.
 
-## 2. Como saber quais periféricos monitorar
+## 2. Como identificar o mouse monitorado
 
-O núcleo deverá manter um catálogo de protocolos implementados. Cada entrada informa como reconhecer a interface correta, quais conexões foram validadas e quais operações estão disponíveis.
+O núcleo deverá manter um catálogo de protocolos implementados. Cada entrada informa como reconhecer a interface correta do MT760, quais conexões foram validadas e quais operações estão disponíveis.
 
 A identificação combina VID/PID, interface ou coleção, usage page/usage, descritor e informações adicionais quando confiáveis. VID/PID identifica uma família, não uma unidade física única. O caminho como `/dev/hidraw5` pode mudar e não deve ser uma identidade permanente. O identificador `20220811` observado no MT760 também não está comprovado como serial único ou firmware.
 
 Proposta de política inicial:
 
-- Descobrir interfaces e apresentar periféricos reconhecidos.
-- Monitorar automaticamente os modelos suportados, respeitando preferências salvas de pausar ou ignorar um dispositivo.
+- Descobrir interfaces e apresentar o mouse reconhecido.
+- Monitorar automaticamente o MT760, respeitando preferências salvas de pausar ou ignorar o dispositivo.
 - Expor dispositivos sem suporte apenas como inventário, sem experimentar comandos sobre eles.
 - Criar novas sessões após reconexão e reconciliar identidades sem fundir duas unidades iguais. Em caso de ambiguidade, não aplicar um perfil automaticamente.
 - Tratar cada periférico lógico de um receptor compartilhado separadamente; sua identificação depende do protocolo desse receptor.
@@ -69,11 +65,11 @@ flowchart TD
     Wait --> Enumerate
 ```
 
-Uma falha em um periférico não deve parar os demais. A interface recebe estados explícitos como conectado, aguardando permissão, em repouso, desconectado ou com erro; dado antigo não deve parecer uma leitura atual.
+Uma falha em uma unidade não deve interromper as demais. A interface recebe estados explícitos como conectado, aguardando permissão, em repouso, desconectado ou com erro; dado antigo não deve parecer uma leitura atual.
 
 ## 3. Comunicação com o sistema operacional
 
-O primeiro candidato para acesso HID é HIDAPI por meio da biblioteca Rust `hidapi`. A [HIDAPI possui backends para os três sistemas](https://github.com/libusb/hidapi), e a [API Rust inclui `get_input_report`](https://docs.rs/hidapi/latest/hidapi/struct.HidDevice.html). A seleção do backend e o enquadramento dos bytes precisam ser validados em cada plataforma antes de portar nossos offsets.
+O primeiro candidato para acesso HID ao mouse é HIDAPI por meio da biblioteca Rust `hidapi`. A [HIDAPI possui backends para os três sistemas](https://github.com/libusb/hidapi), e a [API Rust inclui `get_input_report`](https://docs.rs/hidapi/latest/hidapi/struct.HidDevice.html). A seleção do backend e o enquadramento dos bytes precisam ser validados em cada plataforma antes de portar nossos offsets.
 
 | Plataforma | Integração prevista | Verificação necessária |
 | --- | --- | --- |
@@ -170,13 +166,13 @@ Não reenviar automaticamente uma gravação cujo resultado ficou incerto, nem a
 
 Preferências, perfis e backups podem começar em JSON versionado com escrita atômica. Configurações permanentes de uma sessão anterior não devem ser confundidas com estado recém-lido.
 
-## 7. Expansão para outros periféricos
+## 7. Expansão para outras variantes do MT760
 
-O catálogo deverá declarar capacidades separadas para leitura e escrita. Hoje, ler polling rate é comprovado; gravá-lo não é. Botões, teclados e headsets ainda precisam de implementação própria.
+O catálogo deverá declarar capacidades separadas para leitura e escrita. Hoje, ler polling rate é comprovado; gravá-lo não é. Botões e outras variantes ainda precisam de implementação própria.
 
 Priorizar funções gravadas no dispositivo. Remapeamento ou macros executados pelo computador são outra capacidade e podem exigir APIs específicas de entrada e permissões adicionais. Não presumir que emitir um evento HID permita interceptar ou substituir entradas normais do sistema.
 
-Para headsets, configurações proprietárias podem usar HID, enquanto volume, dispositivos de áudio e outros recursos podem exigir APIs de áudio do sistema. Não forçar toda a categoria a caber no transporte HID.
+Qualquer variante da família MT760 exige validação própria de firmware, interface e protocolo antes de ser anunciada como compatível.
 
 ## 8. Critérios de entrega
 

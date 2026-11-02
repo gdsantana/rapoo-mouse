@@ -1,0 +1,21 @@
+{
+  "experimental": true,
+  "before": {
+    "capturedAt":"2026-11-01T21:28:52.109413+00:00",
+    "rawResponses":{"battery":"010126","dpi-list":"01000000140018001b00100030004000500002000000020310001400","polling-rate":"010000000201ffff01020003140018001b0010003000400050000200"}
+  },
+  "probe": {
+    "capturedAt":"2026-11-01T21:28:58.028314+00:00",
+    "device":"/dev/hidraw5",
+    "descriptorSha256":"d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738",
+    "procedure":"Send dpi-list, wait 450 ms, send polling-rate, wait 450 ms, then one GET_REPORT(Input).",
+    "requests":[{"query":"dpi-list","requestHex":"baa5a41838060000000000000000000000000000000000000000000000000000"},{"query":"polling-rate","requestHex":"baa5a41830060000000000000000000000000000000000000000000000000000"}],
+    "returnedBytes":28,
+    "responseHex":"010000000201ffff01020003140018001b0010003000400050000200",
+    "exitCode":0
+  },
+  "after": {
+    "capturedAt":"2026-11-01T21:29:05.724914+00:00",
+    "rawResponses":{"battery":"010126","dpi-list":"01000000140018001b00100030004000500002000000020310001400","polling-rate":"010000000201ffff01020003140018001b0010003000400050000200"}
+  }
+}

@@ -1,5 +1,7 @@
 """Experimental fixed read queries from RapooOfficeDev 1.2.1; raw evidence only."""
 import datetime
+from contextlib import contextmanager
+from collections import namedtuple
 import fcntl
 import hashlib
 import json
@@ -12,6 +14,7 @@ import time
 
 DESCRIPTOR_SHA256 = "d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738"
 QUERIES = {"battery": (0xAA, 0, 0), "dpi-list": (0xA4, 0x18, 0x638), "dpi-state": (0xA4, 0x18, 0x660), "polling-rate": (0xA4, 0x18, 0x630)}
+ReceiverLock = namedtuple("ReceiverLock", "identity fd")
 
 
 def request(name):
@@ -40,10 +43,34 @@ def validate_response(name, response, count):
         raise RuntimeError(f"Resposta incompatível para {name}: {count} bytes, status {response[0]:02x}; captura interrompida")
 
 
-def query(name):
+@contextmanager
+def receiver_lock():
+    path = device_path()
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("Outra leitura cooperativa está em andamento") from error
+        original = os.fstat(fd)
+        yield ReceiverLock((original.st_dev, original.st_ino), fd)
+        try:
+            current = os.stat(path)
+        except FileNotFoundError as error:
+            raise RuntimeError("Dispositivo desconectado durante a leitura") from error
+        if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
+            raise RuntimeError("Dispositivo reconectado durante a leitura; resultado descartado")
+    finally:
+        os.close(fd)
+
+
+def query(name, expected_identity=None):
     path = device_path()
     fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
     try:
+        opened = os.fstat(fd)
+        if expected_identity is not None and (opened.st_dev, opened.st_ino) != expected_identity:
+            raise RuntimeError("Dispositivo mudou antes da consulta; nenhum comando enviado")
         info = bytearray(8)
         fcntl.ioctl(fd, 0x80084803, info, True)  # HIDIOCGRAWINFO
         if struct.unpack("IHH", info) != (3, 0x24AE, 0x1870):
@@ -99,25 +126,27 @@ def main():
         restored = json.loads((Path(__file__).parents[1] / "captures/mt760-native-restored.json").read_text())
         assert restored["queries"] == fixture["queries"]
         print("Self-test: pacotes fixos, rejeição de comando/resposta inválidos e ciclo DPI completo OK")
-    elif len(sys.argv) == 3 and sys.argv[1] == "--worker" and sys.argv[2] in QUERIES:
-        query(sys.argv[2])
+    elif len(sys.argv) in (3, 5) and sys.argv[1] == "--worker" and sys.argv[2] in QUERIES:
+        identity = tuple(map(int, sys.argv[3:])) if len(sys.argv) == 5 else None
+        query(sys.argv[2], identity)
     elif sys.argv[1:] == ["--capture"]:
-        path = device_path()
-        if not os.access(path, os.R_OK | os.W_OK):
-            raise PermissionError(f"Sem acesso a {path}; nenhuma consulta enviada")
-        print(json.dumps({"capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                          "experimental": True, "descriptorSha256": DESCRIPTOR_SHA256}), flush=True)
-        for name in ("battery", "dpi-list", "dpi-state"):
-            try:
-                result = subprocess.run([sys.executable, __file__, "--worker", name],
-                                        capture_output=True, text=True, timeout=8)
-            except subprocess.TimeoutExpired as error:
-                print(json.dumps({"query": name, "error": "timeout", "partialOutput": (error.stdout or b"").decode()}))
-                return 1
-            print(result.stdout, end="", flush=True)
-            if result.returncode:
-                print(json.dumps({"query": name, "error": result.stderr.strip()}))
-                return 1
+        with receiver_lock() as lock:
+            path = device_path()
+            if not os.access(path, os.R_OK | os.W_OK):
+                raise PermissionError(f"Sem acesso a {path}; nenhuma consulta enviada")
+            print(json.dumps({"capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                              "experimental": True, "descriptorSha256": DESCRIPTOR_SHA256}), flush=True)
+            for name in ("battery", "dpi-list", "dpi-state"):
+                try:
+                    result = subprocess.run([sys.executable, __file__, "--worker", name, *map(str, lock.identity)],
+                                            capture_output=True, text=True, timeout=8, pass_fds=(lock.fd,))
+                except subprocess.TimeoutExpired as error:
+                    print(json.dumps({"query": name, "error": "timeout", "partialOutput": (error.stdout or b"").decode()}))
+                    return 1
+                print(result.stdout, end="", flush=True)
+                if result.returncode:
+                    print(json.dumps({"query": name, "error": result.stderr.strip()}))
+                    return 1
     else:
         raise SystemExit("Uso: python3 read-mt760.py --self-test | --capture")
     return 0

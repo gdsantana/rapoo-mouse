@@ -1,6 +1,6 @@
-# KMH Project — Arquitetura do front
+# Rapoo Mouse — Arquitetura do front
 
-**Status: proposta de desenvolvimento, atualizada em 2026-10-17.**
+**Status: proposta de desenvolvimento, atualizada em 2026-11-02.**
 
 O front será desenvolvido em **React + TypeScript + Vite**, com a mesma interface para **desktop Tauri 2** e **site no navegador**. Componentes, formulários e estado de apresentação serão compartilhados. O acesso aos dispositivos ficará atrás de um contrato `DeviceClient`, com implementações próprias para cada ambiente.
 
@@ -12,8 +12,8 @@ No desktop, o [núcleo Rust](arquitetura-nucleo.md) executa o monitoramento e a 
 flowchart TB
     Front["Front React compartilhado - desktop e navegador"]
     Front --> Shell["Janela e navegação"]
-    Shell --> List["Lista de dispositivos"]
-    Shell --> Detail["Detalhes do periférico selecionado"]
+    Shell --> List["Lista de unidades do mouse"]
+    Shell --> Detail["Detalhes da unidade selecionada"]
     Detail --> State["Bateria, estado e última leitura"]
     Detail --> Config["Configurações suportadas pelo modelo"]
     Shell --> Preferences["Monitoramento e notificações"]
@@ -36,7 +36,7 @@ Não é necessário introduzir uma biblioteca global de estado imediatamente. Co
 
 ## 2. Informações apresentadas
 
-A lista deverá permitir distinguir mouse, teclado, headset e múltiplas unidades do mesmo tipo. Cada item usa o `deviceId` fornecido pelo cliente ativo, não o nome exibido ou apenas VID/PID. No navegador, a identidade pode ser limitada à sessão; não prometer reconhecimento persistente entre máquinas ou reconexões sem um identificador confiável.
+A lista deverá permitir distinguir múltiplas unidades do MT760. Cada item usa o `deviceId` fornecido pelo cliente ativo, não o nome exibido ou apenas VID/PID. No navegador, a identidade pode ser limitada à sessão; não prometer reconhecimento persistente entre máquinas ou reconexões sem um identificador confiável.
 
 O painel do dispositivo deverá apresentar:
 
@@ -144,7 +144,7 @@ Esses estados têm comportamentos diferentes. O gerenciamento da janela e da ban
 | Minimizar | Janela minimizada pelo sistema | Continua ativo |
 | Fechar a janela | Ocultar para a bandeja na política inicial | Continua ativo |
 | Abrir pelo menu ou iniciar outra instância | Mostrar/reabrir a janela da instância existente | Mantém as sessões existentes |
-| Sair do KMH | Encerrar a interface | Finalizar tarefas com segurança e liberar dispositivos |
+| Sair do Rapoo Mouse | Encerrar a interface | Finalizar tarefas com segurança e liberar o mouse |
 | Encerrar sessão do usuário ou desligar o computador | Encerrar conforme o sistema | Parar; recuperar o estado na próxima inicialização |
 
 A primeira versão pode manter a janela oculta. Uma otimização futura pode destruí-la e recriar a WebView ao abrir. Em ambos os casos, o monitoramento e os alertas nativos pertencem ao núcleo. JavaScript em segundo plano pode sofrer suspensão; ele não é o relógio do monitoramento.
@@ -153,7 +153,7 @@ A primeira versão pode manter a janela oculta. Uma otimização futura pode des
 
 ```mermaid
 flowchart TD
-    Start["Iniciar KMH"] --> Core["Núcleo residente e bandeja"]
+    Start["Iniciar Rapoo Mouse"] --> Core["Núcleo residente e bandeja"]
     Core --> Open["Janela aberta e sincronizada"]
     Open --> Action{"Ação do usuário"}
     Action -->|"Minimizar"| Min["Janela minimizada"]
@@ -162,11 +162,11 @@ flowchart TD
     Hide --> Continue
     Continue -->|"Abrir pelo menu ou lançador"| Sync["Mostrar janela e sincronizar estado"]
     Sync --> Open
-    Core -->|"Sair do KMH"| Shutdown["Concluir ou registrar operação em curso e liberar recursos"]
+    Core -->|"Sair do Rapoo Mouse"| Shutdown["Concluir ou registrar operação em curso e liberar recursos"]
     Shutdown --> Exit["Aplicativo encerrado sem monitoramento"]
 ```
 
-O menu nativo deve ter pelo menos **Abrir KMH** e **Sair do KMH**. Ele também pode mostrar um resumo dos dispositivos. No Linux, não depender exclusivamente de clique ou duplo clique no ícone: a documentação do Tauri registra diferenças nesses eventos. Oferecer abertura pelo menu e pelo lançador e testar os ambientes de desktop suportados. [Bandeja do Tauri](https://v2.tauri.app/learn/system-tray/).
+O menu nativo deve ter pelo menos **Abrir Rapoo Mouse** e **Sair do Rapoo Mouse**. Ele também pode mostrar um resumo dos dispositivos. No Linux, não depender exclusivamente de clique ou duplo clique no ícone: a documentação do Tauri registra diferenças nesses eventos. Oferecer abertura pelo menu e pelo lançador e testar os ambientes de desktop suportados. [Bandeja do Tauri](https://v2.tauri.app/learn/system-tray/).
 
 A opção **Iniciar com minha sessão** configura a inicialização automática pelo núcleo. Ela não transforma o aplicativo em serviço disponível antes do login. [Autostart do Tauri](https://v2.tauri.app/plugin/autostart/).
 

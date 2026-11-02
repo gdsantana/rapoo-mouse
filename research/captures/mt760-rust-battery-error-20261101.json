@@ -1,0 +1,8 @@
+{
+  "date": "2026-11-01",
+  "localTimeApproximately": "17:56",
+  "command": "kmh-native-core --read",
+  "exitCode": 1,
+  "stderr": "Leitura interrompida: Resposta inválida para battery: 02",
+  "observation": "A resposta foi rejeitada; nenhum snapshot foi publicado. A causa do status é desconhecida."
+}

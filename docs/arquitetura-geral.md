@@ -1,8 +1,8 @@
-# KMH Project — Arquitetura geral
+# Rapoo Mouse — Arquitetura geral
 
-**Status: proposta de arquitetura, ainda não implementada. Atualizado em 2026-10-17.**
+**Status: proposta de arquitetura, ainda não implementada. Atualizado em 2026-11-02.**
 
-O KMH será um aplicativo desktop para acompanhar e configurar periféricos compatíveis no Linux, macOS e Windows. Terá dois blocos no desktop: **front em React/TypeScript** e **núcleo em Rust**, integrados pelo Tauri 2. O mesmo front também poderá ser publicado como site, usando um cliente WebHID para dispositivos com protocolo compatível e sem exigir o núcleo instalado.
+O **Rapoo Mouse** será um aplicativo desktop para acompanhar e configurar o **mouse Rapoo MT760** no Linux, macOS e Windows. Terá dois blocos no desktop: **front em React/TypeScript** e **núcleo em Rust**, integrados pelo Tauri 2. O mesmo front também poderá ser publicado como site, usando um cliente WebHID para o MT760 onde o protocolo for compatível e sem exigir o núcleo instalado.
 
 A interface atual e os experimentos Python são a base de pesquisa. Já validamos no Linux a leitura de bateria, DPI e polling rate do MT760 e uma alteração de tabela DPI que persistiu após ciclo de energia, seguida de restauração. Isso não significa que o núcleo Rust ou o suporte às outras plataformas já existam. A [arquitetura da PoC](architecture.md) descreve o estado atual; o [experimento de escrita](../research/experiments/write-dpi.md) contém a evidência física.
 
@@ -10,7 +10,7 @@ A interface atual e os experimentos Python são a base de pesquisa. Já validamo
 
 ```mermaid
 flowchart TB
-    App["KMH Desktop - Tauri 2"]
+    App["Rapoo Mouse Desktop - Tauri 2"]
     App --> Front["Front - React e TypeScript"]
     App --> Core["Núcleo - Rust residente"]
     Front --> Dashboard["Dispositivos e informações atuais"]
@@ -66,21 +66,21 @@ Uma alteração só aparece como aplicada após a confirmação do núcleo. A ed
 
 ## 4. Como identificar a origem das mensagens
 
-As mensagens informam de qual dispositivo vieram, a qual conexão pertencem e quando o estado foi obtido. Assim, o front distingue dois mouses iguais e não confunde uma resposta antiga com uma nova conexão. Os identificadores e revisões estão detalhados na [arquitetura do núcleo](arquitetura-nucleo.md#4-sessões-filas-e-consultas).
+As mensagens informam de qual dispositivo vieram, a qual conexão pertencem e quando o estado foi obtido. Assim, o front distingue duas unidades MT760 e não confunde uma resposta antiga com uma nova conexão. Os identificadores e revisões estão detalhados na [arquitetura do núcleo](arquitetura-nucleo.md#4-sessões-filas-e-consultas).
 
 ## 5. Funcionamento em segundo plano
 
-A primeira versão terá uma instância residente por usuário. Fechar a janela deverá ocultá-la para a bandeja; **Sair do KMH** deverá encerrar o aplicativo e o monitoramento. Iniciar com a sessão do usuário será uma preferência opcional.
+A primeira versão terá uma instância residente por usuário. Fechar a janela deverá ocultá-la para a bandeja; **Sair do Rapoo Mouse** deverá encerrar o aplicativo e o monitoramento. Iniciar com a sessão do usuário será uma preferência opcional.
 
 O núcleo continuará consultando os dispositivos, detectando mudanças e emitindo notificações nativas quando necessário. O React poderá ter sua execução suspensa ou nem estar carregado; nenhuma função essencial ficará dependendo dele. Não há monitoramento quando o aplicativo está encerrado ou o computador está suspenso.
 
-## 6. Tempo real e múltiplos periféricos
+## 6. Tempo real e múltiplas unidades
 
 Cada dispositivo terá estado, capacidades e frequência de consulta próprios. Eventos do hardware serão aproveitados quando disponíveis; caso contrário, o núcleo consultará o dispositivo e comparará os estados. No MT760, as consultas foram comprovadas, mas notificações espontâneas de DPI/bateria não foram identificadas.
 
 Os 1000 Hz configurados no mouse não exigem consultar bateria e configurações a cada milissegundo. As consultas devem respeitar o protocolo, o tempo de resposta e o repouso do dispositivo.
 
-Teclados e headsets serão adicionados por implementações específicas de protocolo e, quando necessário, por adaptadores de áudio/entrada do sistema. A arquitetura extensível não implica suporte automático a qualquer modelo.
+O escopo é o MT760. Outras variantes da família só entram após pesquisa e validação próprias de protocolo, firmware e conexão; a arquitetura extensível não implica suporte automático a qualquer modelo.
 
 ## 7. Evolução a partir da PoC
 
@@ -104,7 +104,7 @@ flowchart TB
     Contract --> Browser["Cliente browser"]
     Browser --> Protocol["Protocolo compatível com a web"]
     Protocol --> HID["WebHID com autorização"]
-    Native --> Device["Periférico compatível"]
+    Native --> Device["Mouse compatível"]
     HID --> Device
 ```
 

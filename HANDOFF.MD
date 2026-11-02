@@ -627,7 +627,7 @@ Responsible for handling device profiles where supported and maintaining optiona
 ### 7.3 Suggested Repository Structure
 
 ```text
-rapoo-configurator/
+rapoo-mouse/
 ├── apps/
 │   └── web/
 │       └── src/

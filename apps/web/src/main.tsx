@@ -7,9 +7,15 @@ import { observedRapoo } from '@rapoo/device-definitions';
 import './style.css';
 import { probeBattery, supportsProbe } from './webhid-probe';
 import type { ProbeResult } from './webhid-probe';
-import { readLocal } from './local-reader';
-import type { Reading } from './local-reader';
+import { bridgeClient } from './device-client';
+import type { DeviceSnapshot } from './device-client';
+import { createDesktopClient } from './desktop-client';
+import { ConnectionGuard } from './connection-guard';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
+const desktop = import.meta.env.MODE === 'desktop';
+const deviceClient = desktop ? createDesktopClient(invoke, listen) : bridgeClient;
 const hid = navigator.hid;
 const unavailable = availability(window.isSecureContext, hid);
 
@@ -17,24 +23,65 @@ function App() {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const handles = useRef<Inspection[]>([]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('Selecione o mouse ou receptor para começar.');
+  const [message, setMessage] = useState(desktop ? 'Conecte o receptor para consultar o mouse.' : 'Selecione o mouse ou receptor para começar.');
   const [error, setError] = useState<string | null>(null);
   const [rapooOnly, setRapooOnly] = useState(true);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [reading, setReading] = useState<Reading | null>(null);
+  const [deviceSnapshot, setDeviceSnapshot] = useState<DeviceSnapshot | null>(null);
+  const reading = deviceSnapshot?.reading ?? null;
   const [readingError, setReadingError] = useState<string | null>(null);
+  const [watchReady, setWatchReady] = useState(!desktop);
+  const connection = useRef(new ConnectionGuard());
+
+  useEffect(() => {
+    if (!desktop) return;
+    let active = true;
+    let failed = false;
+    let unsubscribe: (() => void) | undefined;
+    deviceClient.subscribe(event => {
+      if (!active || !connection.current.changed(event)) return;
+      setDeviceSnapshot(null);
+      if (!event.available) {
+        failed = true;
+        setWatchReady(false);
+        setReadingError('Não foi possível acompanhar conexões HID. Reinicie o aplicativo.');
+      } else {
+        setMessage('Conexões HID mudaram. Leia as informações novamente.');
+      }
+    }).then(async stop => {
+      if (!active) { stop(); return; }
+      unsubscribe = stop;
+      const capabilities = await deviceClient.getCapabilities();
+      if (!active) return;
+      if (!capabilities.readTelemetry) {
+        failed = true;
+        setReadingError('Leitura nativa indisponível neste ambiente.');
+      }
+      if (!failed) setWatchReady(true);
+    }).catch(() => {
+      if (!active) return;
+      setDeviceSnapshot(null);
+      setReadingError('Não foi possível acompanhar conexões HID. Reinicie o aplicativo.');
+    });
+    return () => { active = false; unsubscribe?.(); };
+  }, []);
 
   async function readMouse() {
     if (busy) return;
     setBusy(true);
-    setReading(null);
+    setDeviceSnapshot(null);
     setReadingError(null);
+    if (desktop) connection.current.begin();
     try {
       await closeInspections(handles.current);
       setInspections(current => current.map(i => ({...i, snapshot: {...i.snapshot, opened: i.device.opened}})));
-      setReading(await readLocal());
-      setMessage('Bateria, DPI e polling rate recebidos do receptor pela ponte local.');
+      const snapshot = await deviceClient.readSnapshot();
+      if (desktop && !connection.current.accept(snapshot.eventGeneration, snapshot.sessionId, snapshot.revision)) {
+        throw new Error('Uma conexão HID mudou durante a leitura. Tente novamente.');
+      }
+      setDeviceSnapshot(snapshot);
+      setMessage(desktop ? 'Bateria, DPI e polling rate recebidos do núcleo local.' : 'Bateria, DPI e polling rate recebidos do receptor pela ponte local.');
     } catch (cause) {
       setReadingError(cause instanceof Error ? cause.message : String(cause));
       setMessage('A leitura falhou. Nenhum valor anterior está sendo apresentado como atual.');
@@ -119,6 +166,10 @@ function App() {
       devices: inspections.map(i => i.snapshot),
       batteryProbe: probe,
       nativeReading: reading,
+      nativeSession: deviceSnapshot ? {
+        deviceId: deviceSnapshot.deviceId, sessionId: deviceSnapshot.sessionId,
+        revision: deviceSnapshot.revision, eventGeneration: deviceSnapshot.eventGeneration,
+      } : null,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(evidence, null, 2)], {type: 'application/json'}));
     const link = document.createElement('a');
@@ -130,45 +181,45 @@ function App() {
   return <main>
     <header><a className="brand" href="/">rapoo<span> / laboratório aberto</span></a><span className="mode">Somente leitura</span></header>
     <section className="intro">
-      <div><h1>O que o navegador <br />consegue ver do seu mouse?</h1>
-      <p>Inspecione a conexão e os descritores HID. Este primeiro experimento não altera as configurações do dispositivo.</p></div>
-      <div className="connector" aria-hidden="true"><span>USB</span><i /><span>HID</span><i /><span>Web</span></div>
+      <div><h1>{desktop ? 'Informações do seu mouse' : <>O que o navegador <br />consegue ver do seu mouse?</>}</h1>
+      <p>{desktop ? 'Consulte os dados disponíveis no núcleo local.' : 'Inspecione a conexão e os descritores HID. Este primeiro experimento não altera as configurações do dispositivo.'}</p></div>
+      <div className="connector" aria-hidden="true"><span>USB</span><i /><span>HID</span><i /><span>{desktop ? 'App' : 'Web'}</span></div>
     </section>
-    <section className="connection" aria-labelledby="connection-title">
+    {!desktop && <><section className="connection" aria-labelledby="connection-title">
       <div><h2 id="connection-title">Conectar e inspecionar</h2><p>Use o seletor do navegador para autorizar o acesso.</p></div>
       <div className="controls"><button onClick={() => selectDevice()} disabled={!!unavailable || busy}>{busy ? 'Aguarde…' : 'Selecionar dispositivo'}</button>
       <button className="reopen" onClick={() => selectDevice('authorized')} disabled={!!unavailable || busy}>Reabrir dispositivos autorizados</button>
       <label><input type="checkbox" checked={rapooOnly} onChange={e => setRapooOnly(e.target.checked)} disabled={busy} />Mostrar somente Rapoo</label></div>
     </section>
     {unavailable && <p className="notice" role="alert">{unavailable}</p>}
-    {error && <p className="notice" role="alert">{error}</p>}
+    {error && <p className="notice" role="alert">{error}</p>}</>}
     <div className="status" role="status"><span className={opened ? 'dot online' : 'dot'} />{message}</div>
     <section className="device" aria-labelledby="telemetry-title">
       <h2 id="telemetry-title">Informações do mouse</h2>
       <p>Leia bateria, DPI e polling rate configurado do MT760 conectado pelo receptor 2,4 GHz.</p>
-      <button className="secondary" onClick={readMouse} disabled={busy}>{busy ? 'Lendo…' : 'Ler informações do mouse'}</button>
-      <p className="observed">Conexão pela ponte local Linux · Leitura experimental · Atualização manual</p>
+      <button className="secondary" onClick={readMouse} disabled={busy || (desktop && !watchReady)}>{busy ? 'Lendo…' : 'Ler informações do mouse'}</button>
+      <p className="observed">{desktop ? 'Núcleo local Linux' : 'Conexão pela ponte local Linux'} · Leitura experimental · Atualização manual</p>
       {readingError && <p className="notice" role="alert">{readingError}</p>}
       {reading && <div role="status">
         <dl className="telemetry-values"><div><dt>Bateria informada</dt><dd>{reading.batteryPercent}%</dd></div>
-          <div><dt>DPI atual</dt><dd>{reading.activeDpi} DPI</dd></div>
+          <div><dt>{desktop ? 'DPI na leitura' : 'DPI atual'}</dt><dd>{reading.activeDpi} DPI</dd></div>
           <div><dt>Estágio ativo</dt><dd>{reading.activeIndex + 1} de {reading.enabledStages}</dd></div>
           <div><dt>Polling rate configurado</dt><dd>{reading.pollingRateHz === null ? `Desconhecido (código ${reading.pollingRateCode})` : `${reading.pollingRateHz} Hz`}</dd></div></dl>
         <p>Estágios habilitados: {reading.dpiValues.slice(0, reading.enabledStages).join(' · ')} DPI</p>
-        <p className="observed">Recebido do receptor em {new Date(reading.capturedAt).toLocaleString('pt-BR')} · Fonte: Linux hidraw</p>
+        <p className="observed">Recebido do receptor em {new Date(reading.capturedAt).toLocaleString('pt-BR')} · Fonte: Linux hidraw{desktop && ' · Observação de conexões experimental'}</p>
         <button className="secondary" onClick={exportEvidence} disabled={busy}>Exportar leitura JSON</button>
         <details><summary>Resposta real da leitura</summary><pre>{JSON.stringify(reading, null, 2)}</pre></details>
       </div>}
-      <details className="webhid-experiment"><summary>Diagnóstico WebHID direto</summary>
+      {!desktop && <details className="webhid-experiment"><summary>Diagnóstico WebHID direto</summary>
       <p>Verifique se a resposta também chega por evento do navegador. Reabra as interfaces antes do teste.</p>
       <button className="secondary" onClick={testWebHid} disabled={busy || !inspections.some(i => supportsProbe(i.device))}>Testar bateria via WebHID</button>
       {probe && <div role="status"><p>{probe.error ? `Falha no envio: ${probe.error}` : probe.reports.length
         ? `${probe.reports.length} resposta(s) BA recebida(s) por evento WebHID.`
         : 'Consulta enviada. Nenhuma resposta BA por evento WebHID em 3 segundos.'}</p>
         <details><summary>Evidência do teste WebHID</summary><pre>{JSON.stringify(probe, null, 2)}</pre></details></div>}
-      </details>
+      </details>}
     </section>
-    {!inspections.length && !reading && <section className="empty"><h2>Aguardando um dispositivo</h2><p>Após a seleção, você verá o nome, VID/PID, coleções e formatos dos relatórios expostos pelo navegador.</p>
+    {!desktop && !inspections.length && !reading && <section className="empty"><h2>Aguardando um dispositivo</h2><p>Após a seleção, você verá o nome, VID/PID, coleções e formatos dos relatórios expostos pelo navegador.</p>
       <details><summary>O mouse não aparece na lista?</summary><p>Experimente USB ou receptor 2,4 GHz e desmarque o filtro Rapoo. Interfaces padrão de mouse e teclado podem ser protegidas pelo navegador. No Linux, a abertura também depende das permissões de hidraw. Consulte o README antes de alterar permissões.</p></details></section>}
     {!!inspections.length && <>
       <div className="results-heading"><h2>Interfaces encontradas <span>({inspections.length})</span></h2><div className="actions"><button className="secondary" onClick={disconnect} disabled={!opened || busy}>Encerrar conexão</button><button className="secondary" onClick={exportEvidence} disabled={busy}>Exportar evidência JSON</button></div></div>
@@ -186,8 +237,8 @@ function App() {
         </article>;
       })}
     </>}
-    <aside><h2>O que este experimento confirma</h2><p>Leitura nativa de bateria e DPI verificada no MT760 deste laboratório. A ponte entrega os dados ao navegador; gravação de configurações e outros firmwares continuam sem validação.</p><p className="observed">Referência local observada: {hex(observedRapoo.vendorId)}:{hex(observedRapoo.productId)} · MT760 via receptor 2,4 GHz informado pelo usuário.</p></aside>
-    <footer>Rapoo MT760 · PoC WebHID independente<span>Local · Sem telemetria · Sem comandos de configuração</span></footer>
+    <aside><h2>O que este experimento confirma</h2><p>Leitura nativa de bateria e DPI verificada no MT760 deste laboratório. {desktop ? 'O núcleo faz a leitura local; ' : 'A ponte entrega os dados ao navegador; '}gravação de configurações e outros firmwares continuam sem validação.</p><p className="observed">Referência local observada: {hex(observedRapoo.vendorId)}:{hex(observedRapoo.productId)} · MT760 via receptor 2,4 GHz informado pelo usuário.</p></aside>
+    <footer>Rapoo MT760 · {desktop ? 'Núcleo desktop experimental' : 'PoC WebHID independente'}<span>Local · Sem telemetria · Sem comandos de configuração</span></footer>
   </main>;
 }
 
