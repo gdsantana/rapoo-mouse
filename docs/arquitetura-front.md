@@ -6,6 +6,22 @@ O front será desenvolvido em **React + TypeScript + Vite**, com a mesma interfa
 
 No desktop, o [núcleo Rust](arquitetura-nucleo.md) executa o monitoramento e a comunicação com os dispositivos. No navegador, um cliente WebHID executará somente protocolos e operações compatíveis com essa API, enquanto a página estiver ativa. O site poderá funcionar sem núcleo instalado para esses dispositivos; isso **ainda não foi validado para o MT760**. A [visão geral](arquitetura-geral.md) descreve os dois modos. Esta mudança prepara a arquitetura; os adaptadores ainda não estão implementados.
 
+## Leitura parcial de bateria por Bluetooth
+
+O site oferece uma leitura manual da bateria por Web Bluetooth, separada da leitura do receptor pela ponte. Ela seleciona um dispositivo Rapoo, lê `battery_level` no serviço padrão `battery_service` e apresenta nome e porcentagem sem associá-los automaticamente ao dispositivo WebHID ou aos valores de DPI do receptor. Em 2026-11-02, o usuário confirmou 36% no MT760 conectado ao Chromium no Linux com recursos experimentais ativados. A leitura usa uma origem segura (HTTPS ou localhost) e depende do suporte e da permissão do navegador. A documentação do Chrome orienta ativar recursos experimentais no Linux; isso deve ser avaliado para cada versão e plataforma.
+
+Esta é uma integração parcial: o componente experimental usa Web Bluetooth diretamente e ainda não integra o contrato `DeviceClient` proposto. DPI, polling, botões e escrita Bluetooth não foram validados. A leitura da bateria não demonstra que essas operações sejam possíveis no mesmo dispositivo ou navegador. Detalhes e evidências estão na [investigação](../research/software-analysis/ahub-browser-investigation.md).
+
+## Interface implementada em 2026-11-02
+
+O painel Mouse Studio reúne conexão, indicadores de bateria, DPI e polling rate, capacidades, diagnóstico e ajuda. O layout se adapta ao celular e usa tokens de tipografia, superfícies escuras e destaque verde para a ação principal. Valores ausentes aparecem como desconhecidos, sem dados simulados.
+
+`apps/web/src/main.tsx` apresenta a interface. `use-mouse.ts` concentra estado, seleção, permissões, leitura, desconexão, exportação e limpeza das interfaces. Os clientes de comunicação existentes e o transporte WebHID permanecem separados da apresentação.
+
+Esta etapa entrega o redesenho da issue #1 e a separação da lógica da tela. Não conclui o critério de configuração sem instalação: no MT760 observado, a leitura completa ainda depende da ponte Linux no navegador ou do núcleo no desktop. Gravação de configurações pelo navegador, suporte a outros firmwares e nova validação com hardware real continuam pendentes. Nenhum controle de escrita é oferecido sem suporte comprovado. A interface permanece com `noindex` durante essa etapa experimental.
+
+Validação desta etapa: builds web e desktop TypeScript/Vite e os 43 testes existentes passaram. O navegador local confirmou ausência de overflow horizontal em 1440 e 390 px, ação de conexão visível na primeira tela mobile e erro inline quando a ponte não está disponível. Não houve nova validação com hardware real.
+
 ## 1. Hierarquia da interface
 
 ```mermaid

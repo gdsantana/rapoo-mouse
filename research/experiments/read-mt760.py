@@ -13,12 +13,20 @@ import sys
 import time
 
 DESCRIPTOR_SHA256 = "d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738"
-QUERIES = {"battery": (0xAA, 0, 0), "dpi-list": (0xA4, 0x18, 0x638), "dpi-state": (0xA4, 0x18, 0x660), "polling-rate": (0xA4, 0x18, 0x630)}
+QUERIES = {"battery": (0xAA, 0, 0), "dpi-list": (0xA4, 0x18, 0x638), "dpi-state": (0xA4, 0x18, 0x660), "polling-rate": (0xA4, 0x18, 0x630), "button-block-0": (0xA4, 0x10, 0x600)}
+QUERIES["button-block-1"] = (0xA4, 0x10, 0x604)
+QUERIES["button-block-4"] = (0xA4, 0x10, 0x610)
+QUERIES["button-block-7"] = (0xA4, 0x10, 0x61C)
+QUERIES["button-block-8"] = (0xA4, 0x10, 0x620)
+QUERIES["firmware-version"] = (0xA3, 0, 0)
+QUERIES["receiver-firmware-version"] = (0xB0, 0, 0)
 ReceiverLock = namedtuple("ReceiverLock", "identity fd")
 
 
 def request(name):
     operation, length, address = QUERIES[name]
+    if name == "receiver-firmware-version":
+        return bytes((0xBA, operation)) + bytes(30)
     payload = bytes((0xA5, operation, length)) + struct.pack("<I", address)
     return bytes((0xBA,)) + payload.ljust(31, b"\0")
 
@@ -38,7 +46,7 @@ def device_path():
 
 
 def validate_response(name, response, count):
-    expected = 3 if name == "battery" else 28
+    expected = 3 if name == "battery" else 5 if name in ("firmware-version", "receiver-firmware-version") else 4 + QUERIES[name][1]
     if count != expected or response[0] != 1:
         raise RuntimeError(f"Resposta incompatível para {name}: {count} bytes, status {response[0]:02x}; captura interrompida")
 
@@ -96,6 +104,29 @@ def main():
         assert request("dpi-list") == bytes.fromhex("ba a5 a4 18 38 06 00 00") + bytes(24)
         assert request("dpi-state") == bytes.fromhex("ba a5 a4 18 60 06 00 00") + bytes(24)
         assert request("polling-rate") == bytes.fromhex("ba a5 a4 18 30 06 00 00") + bytes(24)
+        assert request("button-block-0") == bytes.fromhex("ba a5 a4 10 00 06 00 00") + bytes(24)
+        assert request("button-block-1") == bytes.fromhex("ba a5 a4 10 04 06 00 00") + bytes(24)
+        assert request("button-block-4") == bytes.fromhex("ba a5 a4 10 10 06 00 00") + bytes(24)
+        assert request("button-block-7") == bytes.fromhex("ba a5 a4 10 1c 06 00 00") + bytes(24)
+        assert request("button-block-8") == bytes.fromhex("ba a5 a4 10 20 06 00 00") + bytes(24)
+        assert request("firmware-version") == bytes.fromhex("ba a5 a3 00 00 00 00 00") + bytes(24)
+        assert request("receiver-firmware-version") == bytes.fromhex("ba b0") + bytes(30)
+        for name in ("firmware-version", "receiver-firmware-version"):
+            validate_response(name, bytes([1, 0, 0, 0, 0]), 5)
+            for response in (bytes([1, 0, 0, 0]), bytes([2, 0, 0, 0, 0])):
+                try:
+                    validate_response(name, response, len(response))
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError("Resposta de versão inválida aceita")
+        validate_response("button-block-0", bytes([1]) + bytes(19), 20)
+        try:
+            validate_response("button-block-0", bytes([1]) + bytes(27), 28)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Resposta de outro tamanho aceita")
         try:
             request("write")
         except KeyError:
@@ -129,14 +160,15 @@ def main():
     elif len(sys.argv) in (3, 5) and sys.argv[1] == "--worker" and sys.argv[2] in QUERIES:
         identity = tuple(map(int, sys.argv[3:])) if len(sys.argv) == 5 else None
         query(sys.argv[2], identity)
-    elif sys.argv[1:] == ["--capture"]:
+    elif sys.argv[1:] in (["--capture"], ["--capture-battery"], ["--capture-button-block-0"], ["--capture-button-block-1"], ["--capture-button-block-4"], ["--capture-button-block-7"], ["--capture-button-block-8"], ["--capture-firmware-version"], ["--capture-receiver-firmware-version"]):
         with receiver_lock() as lock:
             path = device_path()
             if not os.access(path, os.R_OK | os.W_OK):
                 raise PermissionError(f"Sem acesso a {path}; nenhuma consulta enviada")
             print(json.dumps({"capturedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                               "experimental": True, "descriptorSha256": DESCRIPTOR_SHA256}), flush=True)
-            for name in ("battery", "dpi-list", "dpi-state"):
+            names = ("battery", "dpi-list", "dpi-state") if sys.argv[1:] == ["--capture"] else (sys.argv[1][len("--capture-"):],)
+            for name in names:
                 try:
                     result = subprocess.run([sys.executable, __file__, "--worker", name, *map(str, lock.identity)],
                                             capture_output=True, text=True, timeout=8, pass_fds=(lock.fd,))
@@ -148,7 +180,7 @@ def main():
                     print(json.dumps({"query": name, "error": result.stderr.strip()}))
                     return 1
     else:
-        raise SystemExit("Uso: python3 read-mt760.py --self-test | --capture")
+        raise SystemExit("Uso: python3 read-mt760.py --self-test | --capture | --capture-battery | --capture-button-block-{0,1,4,7,8} | --capture-firmware-version | --capture-receiver-firmware-version")
     return 0
 
 

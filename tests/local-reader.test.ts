@@ -38,3 +38,13 @@ test('uses fixed POST without payload; rejects bridge failure or unavailability'
     await assert.rejects(readLocal(), /npm run bridge/);
   } finally {globalThis.fetch = original;}
 });
+
+test('DPI respects the unsigned 16-bit protocol in units of 50', () => {
+  const data = fixture();
+  const reading = (value: number) => ({...data, dpiValues: [value,1200,1350,0,0,0,0], activeIndex:0, activeDpi:value});
+  assert.equal(validateReading(reading(50)).activeDpi, 50);
+  assert.equal(validateReading(reading(0xffff * 50)).activeDpi, 3276750);
+  for (const value of [0xffff * 50 + 50, 65535, 49, 50.5, -50, Infinity, Number.MAX_SAFE_INTEGER]) {
+    assert.throws(() => validateReading(reading(value)), /dados inválidos/);
+  }
+});

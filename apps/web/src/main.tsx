@@ -1,245 +1,108 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { hex, flattenCollections, summarizeCollections } from '@rapoo/core';
-import { availability, closeInspections, describeError, inspectAuthorizedDevices, requestInspections } from '@rapoo/transport-webhid';
-import type { Inspection } from '@rapoo/transport-webhid';
-import { observedRapoo } from '@rapoo/device-definitions';
+import type { DeviceSnapshot as HidSnapshot } from '@rapoo/core';
+import { supportsProbe } from './webhid-probe';
+import { BluetoothBatteryView } from './bluetooth-battery-view';
+import { useMouse, desktop, unavailable } from './use-mouse';
+import './components.css';
 import './style.css';
-import { probeBattery, supportsProbe } from './webhid-probe';
-import type { ProbeResult } from './webhid-probe';
-import { bridgeClient } from './device-client';
-import type { DeviceSnapshot } from './device-client';
-import { createDesktopClient } from './desktop-client';
-import { ConnectionGuard } from './connection-guard';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { I18nProvider, LanguageSelect, useTranslation } from './i18n';
+import { hasTranslation } from './i18n/translate';
 
-const desktop = import.meta.env.MODE === 'desktop';
-const deviceClient = desktop ? createDesktopClient(invoke, listen) : bridgeClient;
-const hid = navigator.hid;
-const unavailable = availability(window.isSecureContext, hid);
+const help = [
+  ['Qual navegador posso usar?', 'Use Chromium para desktop em HTTPS ou localhost. O suporte depende de WebHID e das permissões do sistema.'],
+  ['Como conectar o mouse?', 'Conecte o receptor USB, clique em Conectar mouse e autorize a interface no seletor do navegador.'],
+  ['Por que o mouse não aparece?', 'Desative o filtro Rapoo e tente novamente. Interfaces padrão de mouse e teclado podem ser protegidas pelo navegador.'],
+  ['Posso alterar o DPI?', 'A gravação ainda não está disponível nesta interface. O experimento nativo foi validado apenas no conjunto MT760 observado.'],
+  ['Por que a leitura precisa da ponte local?', 'O receptor testado respondeu ao Linux hidraw, mas não entregou a resposta de bateria por evento WebHID. A leitura completa ainda usa a ponte Linux.'],
+  ['Quais dados são enviados?', 'Esta interface não inclui telemetria de uso. A exportação JSON é iniciada por você e contém os descritores e leituras apresentados.'],
+];
 
-function App() {
-  const [inspections, setInspections] = useState<Inspection[]>([]);
-  const handles = useRef<Inspection[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(desktop ? 'Conecte o receptor para consultar o mouse.' : 'Selecione o mouse ou receptor para começar.');
-  const [error, setError] = useState<string | null>(null);
-  const [rapooOnly, setRapooOnly] = useState(true);
-  const [capturedAt, setCapturedAt] = useState<string | null>(null);
-  const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [deviceSnapshot, setDeviceSnapshot] = useState<DeviceSnapshot | null>(null);
-  const reading = deviceSnapshot?.reading ?? null;
-  const [readingError, setReadingError] = useState<string | null>(null);
-  const [watchReady, setWatchReady] = useState(!desktop);
-  const connection = useRef(new ConnectionGuard());
-
-  useEffect(() => {
-    if (!desktop) return;
-    let active = true;
-    let failed = false;
-    let unsubscribe: (() => void) | undefined;
-    deviceClient.subscribe(event => {
-      if (!active || !connection.current.changed(event)) return;
-      setDeviceSnapshot(null);
-      if (!event.available) {
-        failed = true;
-        setWatchReady(false);
-        setReadingError('Não foi possível acompanhar conexões HID. Reinicie o aplicativo.');
-      } else {
-        setMessage('Conexões HID mudaram. Leia as informações novamente.');
-      }
-    }).then(async stop => {
-      if (!active) { stop(); return; }
-      unsubscribe = stop;
-      const capabilities = await deviceClient.getCapabilities();
-      if (!active) return;
-      if (!capabilities.readTelemetry) {
-        failed = true;
-        setReadingError('Leitura nativa indisponível neste ambiente.');
-      }
-      if (!failed) setWatchReady(true);
-    }).catch(() => {
-      if (!active) return;
-      setDeviceSnapshot(null);
-      setReadingError('Não foi possível acompanhar conexões HID. Reinicie o aplicativo.');
-    });
-    return () => { active = false; unsubscribe?.(); };
-  }, []);
-
-  async function readMouse() {
-    if (busy) return;
-    setBusy(true);
-    setDeviceSnapshot(null);
-    setReadingError(null);
-    if (desktop) connection.current.begin();
-    try {
-      await closeInspections(handles.current);
-      setInspections(current => current.map(i => ({...i, snapshot: {...i.snapshot, opened: i.device.opened}})));
-      const snapshot = await deviceClient.readSnapshot();
-      if (desktop && !connection.current.accept(snapshot.eventGeneration, snapshot.sessionId, snapshot.revision)) {
-        throw new Error('Uma conexão HID mudou durante a leitura. Tente novamente.');
-      }
-      setDeviceSnapshot(snapshot);
-      setMessage(desktop ? 'Bateria, DPI e polling rate recebidos do núcleo local.' : 'Bateria, DPI e polling rate recebidos do receptor pela ponte local.');
-    } catch (cause) {
-      setReadingError(cause instanceof Error ? cause.message : String(cause));
-      setMessage('A leitura falhou. Nenhum valor anterior está sendo apresentado como atual.');
-    }
-    finally { setBusy(false); }
-  }
-
-  async function testWebHid() {
-    const target = handles.current.find(i => supportsProbe(i.device));
-    if (!target || busy) return;
-    setBusy(true);
-    setError(null);
-    setProbe(null);
-    try { setProbe(await probeBattery(target.device)); }
-    catch (cause) { setError(describeError(cause)); }
-    finally { setBusy(false); }
-  }
-
-  useEffect(() => {
-    if (!hid) return;
-    const disconnected = (event: HIDConnectionEvent) => {
-      setInspections(current => {
-        const next = current.map(i => i.device === event.device
-          ? { ...i, snapshot: { ...i.snapshot, opened: false, error: 'Dispositivo desconectado. Selecione novamente para reconectar.' } } : i);
-        handles.current = next;
-        return next;
-      });
-    };
-    hid.addEventListener('disconnect', disconnected);
-    const close = () => { void closeInspections(handles.current).catch(() => {}); };
-    window.addEventListener('pagehide', close);
-    return () => {
-      hid.removeEventListener('disconnect', disconnected);
-      window.removeEventListener('pagehide', close);
-      close();
-    };
-  }, []);
-
-  async function selectDevice(source: 'select' | 'authorized' = 'select') {
-    if (!hid || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      // Invoke the chooser before any await to preserve the user activation.
-      const selection = source === 'select' ? requestInspections(hid, rapooOnly) : inspectAuthorizedDevices(hid, rapooOnly);
-      const next = await selection;
-      if (!next.length) {
-        setMessage(source === 'select' ? 'Seleção cancelada. Nenhuma nova interface foi aberta.' : 'Nenhum dispositivo autorizado encontrado. Use Selecionar dispositivo.');
-        return;
-      }
-      // Keep handles reused by the chooser and close only the previous selection.
-      const previous = handles.current.filter(i => !next.some(n => n.device === i.device));
-      handles.current = next;
-      setInspections(next);
-      setCapturedAt(new Date().toISOString());
-      setMessage(`${next.length} interface(s) inspecionada(s).`);
-      try { await closeInspections(previous); }
-      finally { handles.current = [...next, ...previous.filter(i => i.device.opened)]; }
-    } catch (cause) { setError(describeError(cause)); }
-    finally { setBusy(false); }
-  }
-
-  async function disconnect() {
-    setBusy(true);
-    setError(null);
-    try {
-      await closeInspections(handles.current);
-      setMessage('Conexão encerrada. Os descritores continuam disponíveis para exportação.');
-    } catch (cause) { setError(describeError(cause)); }
-    finally {
-      setInspections(current => current.map(i => ({ ...i, snapshot: { ...i.snapshot, opened: i.device.opened } })));
-      setBusy(false);
-    }
-  }
-
-  function exportEvidence() {
-    const evidence = {
-      schemaVersion: 1, capturedAt: reading?.capturedAt ?? capturedAt, exportedAt: new Date().toISOString(),
-      source: reading ? (inspections.length ? 'WebHID+linux-hidraw' : 'linux-hidraw') : 'WebHID',
-      userAgent: navigator.userAgent, secureContext: window.isSecureContext,
-      configurationCommandsSent: false, model: null, firmware: null, connectionMode: null,
-      devices: inspections.map(i => i.snapshot),
-      batteryProbe: probe,
-      nativeReading: reading,
-      nativeSession: deviceSnapshot ? {
-        deviceId: deviceSnapshot.deviceId, sessionId: deviceSnapshot.sessionId,
-        revision: deviceSnapshot.revision, eventGeneration: deviceSnapshot.eventGeneration,
-      } : null,
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(evidence, null, 2)], {type: 'application/json'}));
-    const link = document.createElement('a');
-    link.href = url; link.download = `rapoo-hid-${Date.now()}.json`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  const opened = inspections.filter(i => i.snapshot.opened).length;
-  return <main>
-    <header><a className="brand" href="/">rapoo<span> / laboratório aberto</span></a><span className="mode">Somente leitura</span></header>
-    <section className="intro">
-      <div><h1>{desktop ? 'Informações do seu mouse' : <>O que o navegador <br />consegue ver do seu mouse?</>}</h1>
-      <p>{desktop ? 'Consulte os dados disponíveis no núcleo local.' : 'Inspecione a conexão e os descritores HID. Este primeiro experimento não altera as configurações do dispositivo.'}</p></div>
-      <div className="connector" aria-hidden="true"><span>USB</span><i /><span>HID</span><i /><span>{desktop ? 'App' : 'Web'}</span></div>
-    </section>
-    {!desktop && <><section className="connection" aria-labelledby="connection-title">
-      <div><h2 id="connection-title">Conectar e inspecionar</h2><p>Use o seletor do navegador para autorizar o acesso.</p></div>
-      <div className="controls"><button onClick={() => selectDevice()} disabled={!!unavailable || busy}>{busy ? 'Aguarde…' : 'Selecionar dispositivo'}</button>
-      <button className="reopen" onClick={() => selectDevice('authorized')} disabled={!!unavailable || busy}>Reabrir dispositivos autorizados</button>
-      <label><input type="checkbox" checked={rapooOnly} onChange={e => setRapooOnly(e.target.checked)} disabled={busy} />Mostrar somente Rapoo</label></div>
-    </section>
-    {unavailable && <p className="notice" role="alert">{unavailable}</p>}
-    {error && <p className="notice" role="alert">{error}</p>}</>}
-    <div className="status" role="status"><span className={opened ? 'dot online' : 'dot'} />{message}</div>
-    <section className="device" aria-labelledby="telemetry-title">
-      <h2 id="telemetry-title">Informações do mouse</h2>
-      <p>Leia bateria, DPI e polling rate configurado do MT760 conectado pelo receptor 2,4 GHz.</p>
-      <button className="secondary" onClick={readMouse} disabled={busy || (desktop && !watchReady)}>{busy ? 'Lendo…' : 'Ler informações do mouse'}</button>
-      <p className="observed">{desktop ? 'Núcleo local Linux' : 'Conexão pela ponte local Linux'} · Leitura experimental · Atualização manual</p>
-      {readingError && <p className="notice" role="alert">{readingError}</p>}
-      {reading && <div role="status">
-        <dl className="telemetry-values"><div><dt>Bateria informada</dt><dd>{reading.batteryPercent}%</dd></div>
-          <div><dt>{desktop ? 'DPI na leitura' : 'DPI atual'}</dt><dd>{reading.activeDpi} DPI</dd></div>
-          <div><dt>Estágio ativo</dt><dd>{reading.activeIndex + 1} de {reading.enabledStages}</dd></div>
-          <div><dt>Polling rate configurado</dt><dd>{reading.pollingRateHz === null ? `Desconhecido (código ${reading.pollingRateCode})` : `${reading.pollingRateHz} Hz`}</dd></div></dl>
-        <p>Estágios habilitados: {reading.dpiValues.slice(0, reading.enabledStages).join(' · ')} DPI</p>
-        <p className="observed">Recebido do receptor em {new Date(reading.capturedAt).toLocaleString('pt-BR')} · Fonte: Linux hidraw{desktop && ' · Observação de conexões experimental'}</p>
-        <button className="secondary" onClick={exportEvidence} disabled={busy}>Exportar leitura JSON</button>
-        <details><summary>Resposta real da leitura</summary><pre>{JSON.stringify(reading, null, 2)}</pre></details>
-      </div>}
-      {!desktop && <details className="webhid-experiment"><summary>Diagnóstico WebHID direto</summary>
-      <p>Verifique se a resposta também chega por evento do navegador. Reabra as interfaces antes do teste.</p>
-      <button className="secondary" onClick={testWebHid} disabled={busy || !inspections.some(i => supportsProbe(i.device))}>Testar bateria via WebHID</button>
-      {probe && <div role="status"><p>{probe.error ? `Falha no envio: ${probe.error}` : probe.reports.length
-        ? `${probe.reports.length} resposta(s) BA recebida(s) por evento WebHID.`
-        : 'Consulta enviada. Nenhuma resposta BA por evento WebHID em 3 segundos.'}</p>
-        <details><summary>Evidência do teste WebHID</summary><pre>{JSON.stringify(probe, null, 2)}</pre></details></div>}
-      </details>}
-    </section>
-    {!desktop && !inspections.length && !reading && <section className="empty"><h2>Aguardando um dispositivo</h2><p>Após a seleção, você verá o nome, VID/PID, coleções e formatos dos relatórios expostos pelo navegador.</p>
-      <details><summary>O mouse não aparece na lista?</summary><p>Experimente USB ou receptor 2,4 GHz e desmarque o filtro Rapoo. Interfaces padrão de mouse e teclado podem ser protegidas pelo navegador. No Linux, a abertura também depende das permissões de hidraw. Consulte o README antes de alterar permissões.</p></details></section>}
-    {!!inspections.length && <>
-      <div className="results-heading"><h2>Interfaces encontradas <span>({inspections.length})</span></h2><div className="actions"><button className="secondary" onClick={disconnect} disabled={!opened || busy}>Encerrar conexão</button><button className="secondary" onClick={exportEvidence} disabled={busy}>Exportar evidência JSON</button></div></div>
-      {inspections.map(({snapshot: d}, index) => {
-        const summary = summarizeCollections(d.collections);
-        return <article className="device" key={`${d.vendorId}-${d.productId}-${index}`}>
-          <div className="device-title"><h3>{d.productName || 'Dispositivo sem nome'}</h3><span className={d.opened ? 'badge success' : 'badge'}>{d.opened ? 'Interface aberta' : 'Interface fechada'}</span></div>
-          <dl><div><dt>Vendor ID</dt><dd>{hex(d.vendorId)}</dd></div><div><dt>Product ID</dt><dd>{hex(d.productId)}</dd></div><div><dt>Coleções do fabricante</dt><dd>{summary.vendorCollections}</dd></div><div><dt>Configuração MT760</dt><dd>Não verificada</dd></div></dl>
-          {d.error && <p className="notice" role="alert">{d.error}</p>}
-          {summary.vendorCollections > 0 && <p className="finding">Coleção do fabricante encontrada. O acesso aos descritores não comprova suporte a DPI, bateria ou memória interna.</p>}
-          <div className="table-wrap"><table><caption>Coleções e relatórios expostos</caption><thead><tr><th>Coleção / usage page</th><th>Usage</th><th>Entrada</th><th>Saída</th><th>Feature</th></tr></thead><tbody>
-            {flattenCollections(d.collections).map((c, ci) => <tr key={ci}><th>{hex(c.usagePage)}{c.usagePage !== null && c.usagePage >= 0xff00 ? ' · Fabricante' : ''}</th><td>{hex(c.usage)}</td>{(['inputReports', 'outputReports', 'featureReports'] as const).map(type => <td key={type}>{c[type].length ? c[type].map((r, ri) => <div key={ri}>ID {hex(r.reportId)} · {r.byteLength === null ? 'Tamanho desconhecido' : `${r.byteLength} B`}</div>) : '—'}</td>)}</tr>)}
-          </tbody></table></div>
-          <details><summary>Descritores completos em JSON</summary><pre>{JSON.stringify(d.collections, null, 2)}</pre></details>
-        </article>;
-      })}
-    </>}
-    <aside><h2>O que este experimento confirma</h2><p>Leitura nativa de bateria e DPI verificada no MT760 deste laboratório. {desktop ? 'O núcleo faz a leitura local; ' : 'A ponte entrega os dados ao navegador; '}gravação de configurações e outros firmwares continuam sem validação.</p><p className="observed">Referência local observada: {hex(observedRapoo.vendorId)}:{hex(observedRapoo.productId)} · MT760 via receptor 2,4 GHz informado pelo usuário.</p></aside>
-    <footer>Rapoo MT760 · {desktop ? 'Núcleo desktop experimental' : 'PoC WebHID independente'}<span>Local · Sem telemetria · Sem comandos de configuração</span></footer>
-  </main>;
+function ErrorNotice({ message }: { message: string }) {
+  const { t } = useTranslation();
+  return <Alert variant="destructive"><AlertDescription>{hasTranslation(message) ? t(message) : <>{t('Falha na operação do dispositivo.')}<details><summary>{t('Detalhes técnicos')}</summary><p>{message}</p></details></>}</AlertDescription></Alert>;
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+function InterfaceCard({ snapshot: d }: { snapshot: HidSnapshot }) {
+  const { t, locale } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const summary = summarizeCollections(d.collections);
+  return <details className="device" onToggle={event => setExpanded(event.currentTarget.open)}>
+    <summary className="device-title"><h3>{d.productName.trim() || t('Dispositivo sem nome')}</h3><Badge variant={d.opened ? 'secondary' : 'outline'}>{d.opened ? t('Interface aberta') : t('Interface fechada')}</Badge></summary>
+    {expanded && <>
+          <dl><div><dt>Vendor ID</dt><dd>{hex(d.vendorId)}</dd></div><div><dt>Product ID</dt><dd>{hex(d.productId)}</dd></div><div><dt>{t("Coleções do fabricante")}</dt><dd>{summary.vendorCollections.toLocaleString(locale)}</dd></div><div><dt>{t("Configuração MT760")}</dt><dd>{t("Não verificada")}</dd></div></dl>
+          {d.error && <ErrorNotice message={d.error} />}
+          {summary.vendorCollections > 0 && <p className="finding">{t("Coleção do fabricante encontrada. O acesso aos descritores não comprova suporte a DPI, bateria ou memória interna.")}</p>}
+          <div className="table-wrap"><table><caption>{t("Coleções e relatórios expostos")}</caption><thead><tr><th>{t("Coleção / usage page")}</th><th>Usage</th><th>{t("Entrada")}</th><th>{t("Saída")}</th><th>Feature</th></tr></thead><tbody>
+            {flattenCollections(d.collections).map((c, ci) => <tr key={ci}><th>{c.usagePage === null ? t('Desconhecido') : hex(c.usagePage)}{c.usagePage !== null && c.usagePage >= 0xff00 ? t(' · Fabricante') : ''}</th><td>{c.usage === null ? t('Desconhecido') : hex(c.usage)}</td>{(['inputReports', 'outputReports', 'featureReports'] as const).map(type => <td key={type}>{c[type].length ? c[type].map((r, ri) => <div key={ri}>ID {r.reportId === null ? t('Desconhecido') : hex(r.reportId)} · {r.byteLength === null ? t('Tamanho desconhecido') : `${r.byteLength} B`}</div>) : '—'}</td>)}</tr>)}
+          </tbody></table></div>
+          <details><summary>{t("Descritores completos em JSON")}</summary><pre>{JSON.stringify(d.collections, null, 2)}</pre></details>
+    </>}
+  </details>;
+}
+
+export function MousePanel({ state }: { state: ReturnType<typeof useMouse> }) {
+  const { inspections, busy, message, error, rapooOnly, setRapooOnly, reading, readingError, watchReady, probe, opened, selectDevice, disconnect, readMouse, testWebHid, exportEvidence } = state;
+  const { t, locale } = useTranslation();
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const interfaceOpen = desktop ? !!reading && watchReady : opened > 0;
+  return <>
+    <a className="skip-link" href="#content">{t("Ir para o conteúdo")}</a>
+    <header className="topbar">
+      <div className="header-identity">
+        <a className="brand" href="/" aria-label="Rapoo Mouse Studio">rapoo<span>mouse studio</span></a>
+        <a className="author-credit caption-4" href="https://github.com/gdsantana">{t('Criado por')} <span>@gdsantana</span></a>
+      </div>
+      <nav aria-label={t("Navegação principal")}>
+        <Button asChild variant="secondary"><a href="#content" aria-current="page">{t("Meu mouse")}</a></Button>
+        <Button asChild variant="ghost"><a href="#diagnostics">{t("Diagnóstico")}</a></Button>
+        <Button asChild variant="ghost"><a href="#help">{t("Ajuda")}</a></Button>
+      </nav>
+      <div className="header-tools"><LanguageSelect /></div>
+    </header>
+    <main id="content">
+      <section className="intro"><div><span className="eyebrow caption-3">{t("MEU MOUSE")}</span><h1 className="heading-3">{t("Seu mouse, do seu jeito.")}</h1><p className="body-3">{t("Conexão, bateria e sensibilidade em um só lugar.")}</p></div><span className="version caption-4">{t("RAPOO / EXPERIMENTAL")}</span></section>
+      <div className="workspace">
+        <Card className="product-card" role="region" data-connected={interfaceOpen} aria-labelledby="product-title"><CardHeader><div className="product-heading"><span className="caption-3">{t("DISPOSITIVO")}</span><Badge variant="outline">{interfaceOpen ? desktop ? t('Leitura disponível') : t('Interface aberta') : t('Aguardando conexão')}</Badge></div></CardHeader><CardContent>{photoFailed ? <div className="mouse-photo photo-fallback" role="img" aria-label={t("Imagem do mouse indisponível")}><span className="title-3">{t("Seu mouse Rapoo")}</span><p className="caption-2">{t("Imagem indisponível. Os dados do dispositivo continuam acessíveis.")}</p></div> : <img className="mouse-photo" src="/rapoo-mt760.png" alt={t("Mouse Rapoo MT760 cinza com rodas de rolagem superior e lateral")} width="1597" height="2000" onError={() => setPhotoFailed(true)} />}<div className="product-info"><CardTitle><h2 id="product-title" className="heading-5">{inspections[0]?.snapshot.productName.trim() || t('Seu mouse Rapoo')}</h2></CardTitle><p className="body-6">{inspections.length ? t(inspections.length === 1 ? '{count} interface encontrada' : '{count} interfaces encontradas', {count: inspections.length}) : t('Conecte seu receptor para começar')}</p></div></CardContent><CardFooter className="flex-col items-stretch"><div className="connection" aria-label={t("Conexão do mouse")}>
+          {!desktop && <>
+            <Button variant={interfaceOpen ? 'outline' : 'default'} onClick={() => interfaceOpen ? disconnect() : selectDevice()} disabled={!!unavailable || busy}>{busy ? t('Aguarde…') : interfaceOpen ? t('Desconectar mouse') : t('Conectar mouse')}<span aria-hidden="true">{interfaceOpen ? '×' : '↗'}</span></Button>
+            <details className="connection-settings"><summary>{t("Opções de conexão")}</summary><div className="connection-options"><label className="caption-2"><input type="checkbox" checked={rapooOnly} onChange={e => setRapooOnly(e.target.checked)} disabled={busy} />{t("Somente dispositivos Rapoo")}</label><Button variant="ghost" size="sm" onClick={() => selectDevice('authorized')} disabled={!!unavailable || busy}>{t("Reabrir autorizados")}</Button>{interfaceOpen && <Button variant="ghost" size="sm" onClick={() => selectDevice()} disabled={!!unavailable || busy}>{t("Trocar dispositivo")}</Button>}</div></details>
+          </>}
+          {unavailable && !desktop && <Alert variant="destructive"><AlertDescription>{t(unavailable)}</AlertDescription></Alert>}{error && <ErrorNotice message={error} />}
+          <div className="status caption-2" role="status"><span className={interfaceOpen ? 'dot online' : 'dot'} />{t(message)}</div>
+        </div><div className="connection-type caption-4">{t('USB / Receptor 2,4 GHz')} <span>WebHID</span></div></CardFooter></Card>
+        <div className="settings">
+          <Card className="card telemetry" role="region" aria-labelledby="telemetry-title"><CardHeader><CardTitle><h2 id="telemetry-title" className="heading-6">{t("Visão geral")}</h2></CardTitle><CardDescription>{t(desktop ? 'Dados do MT760 via receptor e núcleo Linux.' : 'Dados do MT760 via receptor e ponte Linux.')}</CardDescription></CardHeader><CardContent>
+          <dl className={`telemetry-values ${busy ? 'loading' : ''}`} aria-busy={busy}><div><dt>{t("Bateria")}</dt><dd>{reading ? `${reading.batteryPercent}%` : '—'}</dd><span className="caption-5">{t("Carga informada")}</span></div><div><dt>{t("Sensibilidade")}</dt><dd>{reading?.activeDpi.toLocaleString(locale) ?? '—'}<small>DPI</small></dd><span className="caption-5">{reading ? t('Estágio {current} de {total}', {current: reading.activeIndex + 1, total: reading.enabledStages}) : t('Aguardando leitura')}</span></div><div><dt>Polling rate</dt><dd className={reading && reading.pollingRateHz === null ? 'unknown-value' : undefined}>{reading ? reading.pollingRateHz === null ? t('Desconhecido') : <>{reading.pollingRateHz}<small>Hz</small></> : '—'}</dd><span className="caption-5">{reading ? reading.pollingRateHz === null ? t('Código {code}', {code: reading.pollingRateCode}) : t('Taxa configurada') : t('Aguardando leitura')}</span></div></dl>
+          <Button variant="outline" className="w-full justify-between" onClick={readMouse} disabled={busy || (desktop && !watchReady)}>{busy ? t('Lendo informações…') : t('Atualizar informações')}<span aria-hidden="true">↻</span></Button>
+          {!desktop && <BluetoothBatteryView />}
+          {readingError && <ErrorNotice message={readingError} />}{reading && <details className="reading-details"><summary>{t("Detalhes e exportação da leitura")}</summary><div className="reading-content"><p className="caption-2">{t('Estágios: {values} DPI', {values: reading.dpiValues.slice(0, reading.enabledStages).map(value => value.toLocaleString(locale)).join(' · ')})}</p><p className="caption-5">{t('Leitura em {date}', {date: new Date(reading.capturedAt).toLocaleString(locale)})}</p><Button variant="ghost" size="sm" onClick={exportEvidence} disabled={busy}>{t("Exportar leitura JSON")}</Button><details><summary>{t("Resposta da leitura")}</summary><pre>{JSON.stringify(reading, null, 2)}</pre></details></div></details>}
+          </CardContent><CardFooter><p className="caption-5 footnote">{t(desktop ? 'Atualização manual. A leitura completa precisa do núcleo local.' : 'Atualização manual. A leitura completa precisa da ponte Linux em execução.')}</p></CardFooter></Card>
+        </div>
+      </div>
+      <section className="capabilities" aria-labelledby="capabilities-title"><div><span className="eyebrow caption-3">{t("CAPACIDADES REAIS")}</span><h2 id="capabilities-title" className="heading-5">{t("Clareza em cada ajuste.")}</h2></div><article><Badge variant="secondary">{t("Disponível")}</Badge><h3 className="title-3">{t("Inspeção pelo navegador")}</h3><p className="body-6">{t("Autorize interfaces e consulte os descritores HID do dispositivo.")}</p></article><article><Badge variant="outline">{t("Requer ponte local")}</Badge><h3 className="title-3">{t("Bateria, DPI e frequência")}</h3><p className="body-6">{t("Consulte os valores recebidos do receptor MT760 observado.")}</p></article><article><Badge variant="outline">{t("Em pesquisa")}</Badge><h3 className="title-3">{t("Alterar configurações")}</h3><p className="body-6">{t("Gravação de DPI, botões e perfis ainda indisponível nesta interface.")}</p></article></section>
+      <section id="diagnostics" className="diagnostics card"><div className="section-heading"><div><h2 className="heading-6">{t("Diagnóstico")}</h2><p className="body-6">{t("Descritores e evidências para entender a compatibilidade.")}</p></div></div>
+      {!inspections.length && <div className="empty"><h3 className="title-3">{t("Nenhuma interface selecionada")}</h3><p className="body-6">{t("Conecte um dispositivo para consultar suas interfaces e exportar os descritores.")}</p></div>}
+      {!desktop && <details><summary>{t("Teste experimental de bateria via WebHID")}</summary><p className="body-6">{t("Reabra as interfaces antes do teste. O envio da consulta não garante uma resposta do receptor.")}</p><Button variant="outline" onClick={testWebHid} disabled={busy || !inspections.some(i => supportsProbe(i.device))}>{t("Testar bateria via WebHID")}</Button>{probe && <div role="status"><p className="body-6">{probe.error ? t('Falha na operação do dispositivo.') : probe.reports.length ? t(probe.reports.length === 1 ? '{count} resposta recebida.' : '{count} respostas recebidas.', {count: probe.reports.length}) : t('Nenhuma resposta recebida em 3 segundos.')}</p><pre>{JSON.stringify(probe, null, 2)}</pre></div>}</details>}
+    {!!inspections.length && <>
+      <div className="results-heading"><h2>{t('Interfaces encontradas')} <span>({inspections.length})</span></h2><div className="actions"><Button variant="outline" onClick={exportEvidence} disabled={busy}>{t("Exportar evidência JSON")}</Button></div></div>
+      {inspections.map(({ snapshot }, index) => <InterfaceCard key={`${snapshot.vendorId}-${snapshot.productId}-${index}`} snapshot={snapshot} />)}
+    </>}
+      </section>
+      <section className="help" id="help"><div><span className="eyebrow caption-3">{t("ANTES DE COMEÇAR")}</span><h2 className="heading-4">{t("Menos dúvidas.")}<br />{t("Mais controle.")}</h2><p className="body-6">{t("Conecte o receptor, autorize o acesso e consulte os dados disponíveis.")}</p></div><div>{help.map(([question, answer]) => <details key={question}><summary>{t(question)}</summary><p className="body-6">{t(answer)}</p></details>)}</div></section>
+      <footer><a className="brand" href="/">rapoo<span>mouse studio</span></a><div className="footer-credit"><p className="caption-2">{t('Criado por')} <a href="https://github.com/gdsantana">@gdsantana</a></p><p className="caption-5">{t("Projeto independente. Sem vínculo oficial com a Rapoo.")}</p></div><a href="https://github.com/gdsantana/rapoo-mouse" className="caption-4">{t("Código e documentação ↗")}</a></footer>
+    </main>
+  </>;
+}
+function App() { return <MousePanel state={useMouse()} />; }
+const root = createRoot(document.getElementById('root')!);
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('data')) {
+  void import('./dev/ui-stress').then(({ mountStress }) => mountStress(root, MousePanel));
+} else {
+  root.render(<I18nProvider><App /></I18nProvider>);
+}

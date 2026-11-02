@@ -49,6 +49,7 @@ Os testes automatizados não substituem a validação física no dispositivo.
 
 ## Documentação
 
+- [Comunicação Bluetooth, USB e limitações do navegador](docs/comunicacao-mt760.md).
 - [Compatibilidade](docs/compatibility.md) e [protocolo observado](docs/protocol.md).
 - [Leitura nativa, permissões e limitações](research/experiments/native-dpi-battery.md) e [integração no navegador](research/experiments/browser-telemetry.md).
 - [Arquitetura atual](docs/architecture.md) e [arquitetura proposta](docs/arquitetura-geral.md).
