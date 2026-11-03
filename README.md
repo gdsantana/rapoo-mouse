@@ -2,7 +2,7 @@
 
 Ferramenta experimental e independente para inspecionar e ler informações do mouse **Rapoo MT760** no Linux, com foco no receptor de 2,4 GHz. Funciona localmente, sem conta ou serviço externo.
 
-A interface permite inspecionar descritores via WebHID e consultar bateria, DPI e polling rate pela ponte local ou pelo aplicativo desktop. O painel é somente de leitura; a gravação de DPI existe apenas como [experimento separado](research/experiments/write-dpi.md).
+A interface inspeciona descritores via WebHID e recebe DPI e um campo de bateria diretamente por eventos do receptor, sem bridge. A leitura completa do perfil e do polling rate continua disponível pela ponte local ou pelo aplicativo desktop. O painel não oferece gravação; bancadas separadas de [DPI](research/experiments/browser-dpi-write.md) e [polling](research/experiments/browser-polling-write.md) aplicaram e restauraram configurações pelo WebHID, com verificação nativa. As aplicações web persistiram após ciclos de energia; backup, leitura e recuperação após reconexão ainda dependem da bancada nativa.
 
 ## Requisitos
 
@@ -22,7 +22,9 @@ npm ci
 npm run dev
 ```
 
-Abra http://127.0.0.1:5174/ para inspecionar o dispositivo. Para ler bateria, DPI e polling rate, execute `npm run bridge` em outro terminal e clique em **Ler informações do mouse**. A ponte escuta apenas em `127.0.0.1:5175`.
+Abra http://127.0.0.1:5174/, selecione o receptor e aguarde eventos do mouse. No conjunto testado, o botão físico DPI emite a atualização; a página mostra o horário do último evento e não presume polling ou perfil completo. A captura de eventos fica em **Diagnóstico**.
+
+Para uma comparação nativa opcional, execute `npm run bridge` em outro terminal e use **Diagnóstico → Referência nativa opcional → Ler via ponte**. A ponte escuta apenas em `127.0.0.1:5175`.
 
 ## Executar o aplicativo desktop
 

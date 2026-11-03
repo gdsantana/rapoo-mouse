@@ -1,0 +1,25 @@
+{
+  "buttons": [
+    {
+      "disabled": true,
+      "label": "Send polling test"
+    },
+    {
+      "disabled": true,
+      "label": "Restore polling"
+    }
+  ],
+  "checkedAt": "2026-11-02T23:43:41.542Z",
+  "simulation": true,
+  "text": "WebHID polling experiment\nBench test: wireless polling from 1000 to 500 Hz. Verification uses separate native tools.\nKeep the current stage. Do not press DPI during the test. A completed send still requires independent verification.\n{\n  \"outcome\": \"sent-unverified\",\n  \"operation\": \"restore\",\n  \"attemptedAt\": \"2026-11-02T23:43:32.069Z\"\n}\nSend polling test\nRestore polling\n\nThis page is not a general settings editor.",
+  "writes": [
+    {
+      "hex": "a5a504300600000202ffff0000000000000000000000000000000000000000",
+      "id": 186
+    },
+    {
+      "hex": "a5a504300600000201ffff0000000000000000000000000000000000000000",
+      "id": 186
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "simulated-webhid-ui-verification",
+  "hardwareSimulation": true,
+  "origin": "http://127.0.0.1:4176",
+  "servedFrom": "apps/web/dist",
+  "secureContext": true,
+  "nativeBridgeRequests": 0,
+  "injectedStatusPayloadHex": "b001b0040126",
+  "renderedBattery": "38%",
+  "renderedDpi": 1200,
+  "renderedPolling": null,
+  "developmentBenchIncluded": false,
+  "httpsDeploymentTested": false
+}

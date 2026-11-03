@@ -1,0 +1,108 @@
+{
+  "kind": "mt760-polling-test-v1",
+  "createdAt": "2026-11-02T23:55:45.873447+00:00",
+  "descriptorSha256": "d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738",
+  "before": {
+    "source": "linux-hidraw",
+    "experimental": true,
+    "vendorId": 9390,
+    "productId": 6256,
+    "capturedAt": "2026-11-02T23:55:49.803268+00:00",
+    "batteryPercent": 85,
+    "dpiValues": [
+      1000,
+      1200,
+      1350,
+      800,
+      2400,
+      3200,
+      4000
+    ],
+    "enabledStages": 3,
+    "activeIndex": 0,
+    "activeDpi": 1000,
+    "pollingRateCode": 1,
+    "pollingRateHz": 1000,
+    "rawResponses": {
+      "battery": "010155",
+      "dpi-list": "01000000140018001b00100030004000500002000000020310001400",
+      "polling-rate": "010000000201ffff01020003140018001b0010003000400050000200"
+    }
+  },
+  "events": [
+    {
+      "operation": "verify-applied",
+      "verifiedAt": "2026-11-02T23:56:35.933245+00:00",
+      "snapshot": {
+        "source": "linux-hidraw",
+        "experimental": true,
+        "vendorId": 9390,
+        "productId": 6256,
+        "capturedAt": "2026-11-02T23:56:35.933124+00:00",
+        "batteryPercent": 85,
+        "dpiValues": [
+          1000,
+          1200,
+          1350,
+          800,
+          2400,
+          3200,
+          4000
+        ],
+        "enabledStages": 3,
+        "activeIndex": 0,
+        "activeDpi": 1000,
+        "pollingRateCode": 2,
+        "pollingRateHz": 500,
+        "rawResponses": {
+          "battery": "010155",
+          "dpi-list": "01000000140018001b00100030004000500002000000020310001400",
+          "polling-rate": "010000000202ffff01020003140018001b0010003000400050000200"
+        }
+      }
+    },
+    {
+      "operation": "verify-restored",
+      "verifiedAt": "2026-11-02T23:57:21.527742+00:00",
+      "snapshot": {
+        "source": "linux-hidraw",
+        "experimental": true,
+        "vendorId": 9390,
+        "productId": 6256,
+        "capturedAt": "2026-11-02T23:57:21.527619+00:00",
+        "batteryPercent": 85,
+        "dpiValues": [
+          1000,
+          1200,
+          1350,
+          800,
+          2400,
+          3200,
+          4000
+        ],
+        "enabledStages": 3,
+        "activeIndex": 0,
+        "activeDpi": 1000,
+        "pollingRateCode": 1,
+        "pollingRateHz": 1000,
+        "rawResponses": {
+          "battery": "010155",
+          "dpi-list": "01000000140018001b00100030004000500002000000020310001400",
+          "polling-rate": "010000000201ffff01020003140018001b0010003000400050000200"
+        }
+      }
+    }
+  ],
+  "webApply": {
+    "outcome": "sent-unverified",
+    "attemptedAt": "2026-11-02T23:56:15.229Z",
+    "baselineAt": "2026-11-02T23:55:49.803268+00:00",
+    "reportedByUser": true
+  },
+  "webRestore": {
+    "outcome": "sent-unverified",
+    "operation": "restore",
+    "attemptedAt": "2026-11-02T23:57:08.220Z",
+    "reportedByUser": true
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "reviewedAt": "2026-11-02T23:35:53.921672+00:00",
+  "sourceDriverSha256": "4af207a5af13f860218df727619219df90420d4038ad3c3aa49db537235d84a7",
+  "setterVa": "0x00528260",
+  "setterVtableSlot": 43,
+  "readHelperVa": "0x00523180",
+  "readAddress": "0x630",
+  "readLength": 8,
+  "writeAddress": "0x630",
+  "writeLength": 4,
+  "preservedRegisters": [
+    "0x630",
+    "0x632",
+    "0x633"
+  ],
+  "changedRegister": "0x631",
+  "codes1252505001000Hz": [
+    8,
+    4,
+    2,
+    1
+  ],
+  "writeTransactionVa": "0x00524f60",
+  "writeTransactionVtableSlot": 82,
+  "assertedLandmarks": {
+    "0x5282e3": "c68543ffffff04c68542ffffffa5",
+    "0x5282f1": "6830060000",
+    "0x5283ad": "c78544ffffff08000000",
+    "0x5283b9": "c78544ffffff04000000",
+    "0x5283c5": "c78544ffffff02000000",
+    "0x5283d1": "c78544ffffff01000000",
+    "0x528407": "8a9544ffffff",
+    "0x52840d": "88940d4cffffff",
+    "0x528414": "c68541ffffffba",
+    "0x528534": "c20400"
+  },
+  "extraCommitObservedInInspectedSetterAndTransaction": false,
+  "allCallersTraced": false,
+  "hardwareWriteValidated": false,
+  "configurationWritesSent": false
+}

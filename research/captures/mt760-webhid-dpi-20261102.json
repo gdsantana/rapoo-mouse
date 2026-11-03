@@ -1,0 +1,79 @@
+{
+  "kind": "mt760-webhid-inactive-dpi-test-v1",
+  "nativeBaseline": "research/captures/mt760-dpi-write-20261102T212327408279Z.json",
+  "webApplyReportedByUser": {
+    "outcome": "sent-unverified",
+    "attemptedAt": "2026-11-02T21:24:07.970Z",
+    "baselineAt": "2026-11-02T21:23:27.408174+00:00"
+  },
+  "after": {
+    "source": "linux-hidraw",
+    "experimental": true,
+    "vendorId": 9390,
+    "productId": 6256,
+    "capturedAt": "2026-11-02T21:24:49.546342+00:00",
+    "batteryPercent": 39,
+    "dpiValues": [
+      1050,
+      1200,
+      1350,
+      800,
+      2400,
+      3200,
+      4000
+    ],
+    "enabledStages": 3,
+    "activeIndex": 1,
+    "activeDpi": 1200,
+    "pollingRateCode": 1,
+    "pollingRateHz": 1000,
+    "rawResponses": {
+      "battery": "010127",
+      "dpi-list": "01000000150018001b00100030004000500002000100020310001400",
+      "polling-rate": "010000000201ffff01020003150018001b0010003000400050000200"
+    }
+  },
+  "configurationWritesSentByNativeVerifier": false,
+  "powerCycleVerified": false,
+  "restorationVerified": true,
+  "restored": {
+    "source": "linux-hidraw",
+    "experimental": true,
+    "vendorId": 9390,
+    "productId": 6256,
+    "capturedAt": "2026-11-02T21:27:15.542553+00:00",
+    "batteryPercent": 39,
+    "dpiValues": [
+      1000,
+      1200,
+      1350,
+      800,
+      2400,
+      3200,
+      4000
+    ],
+    "enabledStages": 3,
+    "activeIndex": 1,
+    "activeDpi": 1200,
+    "pollingRateCode": 1,
+    "pollingRateHz": 1000,
+    "rawResponses": {
+      "battery": "010127",
+      "dpi-list": "01000000140018001b00100030004000500002000100020310001400",
+      "polling-rate": "010000000201ffff01020003140018001b0010003000400050000200"
+    }
+  },
+  "restorationTransport": "native recovery after browser bench error",
+  "webRestoreReportedError": "Error: Bench baseline expired. Prepare a fresh native baseline",
+  "nativeRecoveryEvents": [
+    {
+      "startedAt": "2026-11-02T21:27:10.908611+00:00",
+      "operation": "restore",
+      "requestHex": "baa5a51038060000140018001b00100030004000500002000000000000000000",
+      "exitCode": 0,
+      "output": "{\"device\": \"/dev/hidraw5\", \"requestHex\": \"baa5a51038060000140018001b00100030004000500002000000000000000000\"}\n{\"returnedBytes\": 1, \"responseBufferHex\": \"0100000000000000000000000000000000000000000000000000000000000000\"}\n",
+      "error": "",
+      "finishedAt": "2026-11-02T21:27:11.614858+00:00"
+    }
+  ]
+}

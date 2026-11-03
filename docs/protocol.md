@@ -15,7 +15,7 @@ Dispositivo observado: VID `0x24AE`, PID `0x1870`, nome USB `Rapoo Gaming Device
 
 A interface 1 também contém teclado, controle de sistema e consumer control; o navegador pode omitir ou bloquear relatórios protegidos. A interface 2 é candidata à investigação, sem significado de comando atribuído.
 
-Fonte: descritores sysfs em `research/device-identification/rapoo-24ae-1870-sysfs.json`, correlacionados com os descritores exibidos pela PoC no navegador. Não houve tráfego de configuração capturado.
+Fonte: descritores sysfs em `research/device-identification/rapoo-24ae-1870-sysfs.json`, correlacionados com os descritores exibidos pela PoC no navegador. Nessa inspeção inicial não houve tráfego de configuração capturado; os experimentos posteriores estão registrados abaixo.
 
 Para promover uma hipótese a comando implementável, registrar VID/PID, variante, firmware, conexão, interface/coleção, tipo e ID do report, comprimento, request/response, valores antes/depois, repetições, origem e confiança conforme HANDOFF.MD. Campos desconhecidos devem permanecer nulos.
 
@@ -42,3 +42,23 @@ Leitura A4, comprimento 0x18, registro 0x630, report BA. Na variante MT760 wirel
 O setter herdado pelo MT760 wireless em 0x0051E9D0 usa A5, comprimento 16, registro 0x638, report BA. O experimento supervisionado gravou 1000→1050 DPI no primeiro estágio inativo, preservando os demais valores, o estágio ativo e os campos de polling observados. ACK 01 e leituras posteriores confirmaram a alteração. Depois do usuário desligar o mouse e retirar/reconectar o receptor, leituras estáveis ainda mostraram 1050 DPI, sem reenvio da gravação. A restauração para 1000 DPI foi enviada uma vez e confirmada por leitura. Isso demonstra persistência no conjunto; a localização física do armazenamento e um novo ciclo após restaurar não foram verificados.
 
 A ponte e a UI continuam somente de leitura. [Pacote, evidência e resultado atualizado](../research/experiments/write-dpi.md).
+
+## Escrita WebHID e eventos BB — 2026-11-02
+
+A bancada de desenvolvimento enviou o mesmo pacote DPI por `sendReport(BA, payload de 31 bytes)`. Aplicação 1000→1050 em estágio inativo e restauração para 1000 foram confirmadas por duas leituras nativas estáveis em cada etapa, mantendo sete valores, contagem, índice e campos de polling observados. O verificador nativo não enviou configuração na segunda rodada. Não houve novo ciclo de energia nem leitura completa de perfil pelo browser.
+
+Uma captura física WebHID recebeu report `BB` com payloads `B0 01 46 05 01 26`, `B0 01 E8 03 01 26` e `B0 01 B0 04 01 26`, coerentes com o ciclo DPI 1350→1000→1200. O campo final foi 38; consulta nativa posterior retornou 39%, sem comparação simultânea. O byte de estado permanece sem semântica de carregamento atribuída. Esses eventos não trazem o perfil completo ou polling.
+
+O painel usa os eventos como telemetria parcial experimental, sem bridge no fluxo padrão. A escrita permanece restrita à bancada de desenvolvimento. [Procedimento, limites e evidências](../research/experiments/browser-dpi-write.md).
+
+## Cabo USB BA FF — 2026-11-02
+
+Na mesma unidade, agora enumerada como `24ae:4500` após conectar o cabo, a coleção de configuração anuncia Input/Output BA de 31 bytes, sem Feature. Consultas fixas `BA FF AA` e `BA FF A4 18 38 06 00 00` responderam por GET_REPORT(Input): bateria 88 e duas respostas DPI idênticas com sete valores originais, três estágios habilitados e índice 1, 1200 DPI. Nenhum evento BA nas janelas de dois segundos. Eventos BB `B0 01 B0 04 01 58` apareceram espontaneamente, coerentes com 1200 DPI e campo de bateria 88. Testes nativos de leitura apenas; nenhuma escrita ou sessão WebHID pelo cabo foi testada. O caminho examinado não eliminou a dependência da leitura nativa. [Capturas e procedimento](../research/experiments/wired-read.md).
+
+## Polling WebHID e persistência das aplicações web
+
+O setter wireless `0x00528260` do driver 1.2.1 lê os campos atuais e prepara operação A5 de quatro bytes em `0x630`. Preserva `0x630/0x632/0x633` e substitui apenas o código wireless de `0x631`. A bancada TypeScript admite exclusivamente 1000→500 Hz e sua restauração, com backup, comparação de blocos e envio único. Para os campos observados `02 01 FF FF`, a aplicação usa `BA A5 A5 04 30 06 00 00 02 02 FF FF`, completando 32 bytes; BA é separado do payload no WebHID. Aplicação/restauração via browser foram confirmadas por leituras nativas estáveis.
+
+Em rodadas próprias, aplicações WebHID de polling 500 Hz e de DPI inativo 1050 permaneceram após desligar mouse e retirar receptor, sem reenvio ou comando extra de commit. A reconexão invalidou as sessões web: recuperações nativas restauraram os valores originais, também confirmados após novos ciclos. Isso comprova persistência no conjunto, sem localizar a memória física nem validar outros setters. A taxa é configuração lida, sem medição dos intervalos USB. Algumas leituras de bateria foram recusadas antes das sequências estáveis; a causa continua desconhecida.
+
+A leitura completa, o backup e a recuperação pós-reconexão continuam nativos. Os controles de configuração permanecem na bancada de desenvolvimento, não no painel de produção. [Polling](../research/experiments/browser-polling-write.md), [DPI](../research/experiments/browser-dpi-write.md).

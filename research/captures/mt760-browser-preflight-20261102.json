@@ -1,0 +1,46 @@
+{
+  "capturedAt": "2026-11-02T21:23:23.307528+00:00",
+  "model": "MT760",
+  "connection": "2.4 GHz receiver",
+  "interfaces": [
+    {
+      "node": "/dev/hidraw6",
+      "descriptorSha256": "0b9e97e6d1cc9d7873aa606fe2e5dcdc7817d9be5539d916ee95752209fa3ab0",
+      "readable": false,
+      "writable": false
+    },
+    {
+      "node": "/dev/hidraw4",
+      "descriptorSha256": "37f4d6463e143a1adf9b53761259b2a82507670213e083b0fc4d33e8db0c6bc5",
+      "readable": false,
+      "writable": false
+    },
+    {
+      "node": "/dev/hidraw5",
+      "descriptorSha256": "d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738",
+      "readable": true,
+      "writable": true
+    }
+  ],
+  "configurationWritesSent": false,
+  "batterySample": {
+    "capturedAt": "2026-11-02T21:13:09.808529+00:00",
+    "requestHex": "baa5aa0000000000000000000000000000000000000000000000000000000000",
+    "responseHex": "010127",
+    "returnedBytes": 3
+  },
+  "preparationsBeforeWake": [
+    "stage 1 active; rejected",
+    "configuration unstable; rejected",
+    "battery status 02; rejected"
+  ],
+  "freshBaseline": "mt760-dpi-write-20261102T212001139848Z.json",
+  "webAutomation": {
+    "authorizedDevices": 0,
+    "previewSnapshotError": "Preview automation snapshot timed out after 15000ms.",
+    "alternativeBrowserInventory": {
+      "apps": 0,
+      "browsers": 0
+    }
+  }
+}

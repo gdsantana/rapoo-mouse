@@ -35,9 +35,10 @@ export function stressState(scenario: Scenario): State {
   return { inspections, reading, busy: scenario === 'loading', message: scenario === 'empty' ? 'Selecione o mouse ou receptor para começar.' : 'Cenário de teste. Nenhum dispositivo real está sendo acessado.',
     error: scenario === 'error' ? 'O navegador negou o acesso. Verifique a permissão do site e se a interface HID é protegida.' : null,
     readingError: scenario === 'error' ? 'Ponte local indisponível ou tempo de leitura excedido. Execute npm run bridge e tente novamente.' : null,
-    watchReady: true, probe: worst ? { source: 'WebHID', requestedAt: '2026-11-02T17:54:58Z', requestHex: 'ba', reports: [], error: null } : null,
+    watchReady: true, vendorCapture: null, capturing: false, collectReports: () => {}, stopCollection: () => {}, webTelemetry: null,
+    probe: worst ? { source: 'WebHID', requestedAt: '2026-11-02T17:54:58Z', requestHex: 'ba', reports: [], error: null } : null,
     rapooOnly: true, setRapooOnly: () => {}, opened: inspections.filter(i => i.snapshot.opened).length,
-    selectDevice: async () => {}, disconnect: async () => {}, readMouse: async () => {}, testWebHid: async () => {}, exportEvidence: () => {},
+    selectDevice: async () => {}, disconnect: async () => {}, readMouse: async () => {}, readBridge: async () => {}, testWebHid: async () => {}, exportEvidence: () => {},
   };
 }
 export function mountStress(root: Root, Panel: React.ComponentType<{ state: State }>) {

@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-11-02T21:42:31.352049+00:00",
+  "webCapture": "mt760-webhid-status-events-20261102.json",
+  "nativeBatteryCheck": {
+    "exitCode": 0,
+    "stdout": "{\"capturedAt\": \"2026-11-02T21:42:30.683721+00:00\", \"experimental\": true, \"descriptorSha256\": \"d6316567a9545dd700ac3d5f2d2d23ff408e2ee1125c5ea385a7dae38aa34738\"}\n{\"device\": \"/dev/hidraw5\", \"query\": \"battery\", \"requestHex\": \"baa5aa0000000000000000000000000000000000000000000000000000000000\"}\n{\"query\": \"battery\", \"responseHex\": \"0101270000000000000000000000000000000000000000000000000000000000\", \"ioctlReturn\": 3}\n",
+    "stderr": ""
+  },
+  "configurationWritesSent": false
+}

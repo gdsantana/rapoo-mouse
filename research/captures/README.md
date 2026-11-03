@@ -10,7 +10,7 @@
 - `browser-native-reading.json`, `browser-native-reading.png`: resposta real entregue pela ponte e exibida no navegador, 59% e 1350 DPI.
 - `browser-bridge-unavailable.png`: indisponibilidade da ponte exibida na página, sem manter os valores anteriores como atuais.
 
-Descritores sysfs independentes estão em `../device-identification/rapoo-24ae-1870-sysfs.json`. Até agora nenhum comando de configuração foi observado.
+Descritores sysfs independentes estão em `../device-identification/rapoo-24ae-1870-sysfs.json`. As primeiras capturas acima antecedem os experimentos de escrita descritos abaixo.
 
 - `mt760-native-polling-rate.json`: duas respostas idênticas A4/0x630, código wireless 1 = 1000 Hz e comparação com o bloco DPI.
 - `bridge-polling-rate-reading.json`: endpoint real da ponte retornando 54% de bateria, 1350 DPI e 1000 Hz em 2026-10-17. O usuário confirmou o valor de polling rate na página; não houve screenshot nesta sessão.
@@ -37,3 +37,28 @@ Descritores sysfs independentes estão em `../device-identification/rapoo-24ae-1
 - `mt760-tauri-watch-20261101.png`: interface desktop com listener inscrito e leitura manual rejeitada por status `02`. A captura não demonstra recepção de eventos físicos de conexão.
 - `mt760-tauri-hotplug-before-20261101.png`, `mt760-tauri-hotplug-removed-20261101.png`, `mt760-tauri-hotplug-reconnected-20261101.png`, `mt760-tauri-hotplug-repeat-20261101.png`: ciclo físico acompanhado em Xvfb. A remoção apagou os dados; após reconexão e ACL reaplicada pelo usuário, duas leituras manuais foram exibidas. A bateria variou de 27% para 38%; a causa não foi determinada.
 - `mt760-tauri-midread-before-20261101.png`, `mt760-tauri-midread-after-20261101.png`: leitura iniciada e processo auxiliar pausado antes da remoção física; após retomada, o tempo limite foi excedido e a UI não exibiu dados anteriores. A pausa consumiu o prazo e impede concluir se a desconexão por si só provocaria falha imediata.
+
+## Browser e cabo em 2026-11-02
+
+- `mt760-browser-preflight-20261102.json`: identidade e descritor do receptor antes da bancada WebHID.
+- `mt760-dpi-write-20261102T212001139848Z.json`: preparação nativa não utilizada para envio web.
+- `mt760-dpi-write-20261102T212327408279Z.json`, `mt760-webhid-dpi-20261102.json`: primeira aplicação web verificada; restauração web recusada por expiração e recuperação nativa confirmada.
+- `mt760-dpi-write-20261102T213205399943Z.json`, `mt760-webhid-dpi-20261102-second.json`: novo backup, aplicação e restauração enviadas pelo navegador, ambas verificadas por leituras nativas estáveis. Sem nova escrita nativa nessa rodada e sem teste de ciclo de energia.
+- `mt760-webhid-status-events-20261102.json`: uma captura física exportada pelo usuário, com três eventos BB correspondentes a 1350, 1000 e 1200 DPI. A segunda sessão solicitada ainda não foi recebida.
+- `mt760-webhid-status-reference-20261102.json`: bateria nativa 39% obtida posteriormente; não é calibração simultânea do campo 38% nos eventos.
+- `mt760-feature-static-review-20261102.json`: endereços e hash da análise estática do driver; o caminho de configuração examinado usa Input, sem novo comando Feature comprovado.
+- `mt760-static-browser-ui-20261102.json`: teste da distribuição estática com HID simulado e chamadas à ponte bloqueadas. Não é evidência de comunicação física nem de publicação HTTPS.
+- `mt760-wired-preflight-20261102.json`: três interfaces USB `24ae:4500`, hashes e descritores, identificados após o usuário conectar o cabo. Não envia consultas.
+- `mt760-wired-battery-20261102.json`: consulta BA FF AA pelo cabo, bateria 88 recebida somente por GET_REPORT(Input), sem eventos na janela de dois segundos.
+- `mt760-wired-dpi-20261102.json`, `mt760-wired-dpi-repeat-20261102.json`: consultas BA FF A4/0x638 retornaram os mesmos 28 bytes por GET_REPORT(Input), tabela original e 1200 DPI ativos. Eventos espontâneos BB com 1200 DPI e campo de bateria 88; nenhum evento BA nas janelas. Testes nativos, sem configuração. [Procedimento](../experiments/wired-read.md).
+
+Procedimento, resultados e limites: [bancada WebHID](../experiments/browser-dpi-write.md).
+
+- `mt760-polling-setter-static-20261102.json`: setter wireless e limites da escrita confirmados estaticamente no driver; não comprova aplicação física.
+- `mt760-polling-browser-ui-simulation-20261102.json`: envio/restauração em dispositivo simulado, sem acesso ao hardware.
+- `mt760-polling-write-20261102T234345640284Z.json`: backup nativo e verificação do estado original após erro HTML no carregamento da bancada. Polling continuava em 1000 Hz; nenhuma escrita nativa de restauração.
+- `mt760-polling-write-20261102T235549803369Z.json`: aplicação e restauração WebHID informadas pelo usuário, ambas confirmadas por leituras nativas estáveis. Polling 1000→500→1000 Hz, DPI e campos adjacentes preservados; nenhuma escrita nativa e nenhum ciclo de energia nesta rodada.
+- `mt760-polling-write-20261102T235829897263Z.json`: nova aplicação WebHID para 500 Hz, persistente após desligar mouse e remover receptor. Releitura nativa sem reenvio confirmou o estado; um envio nativo de recuperação restaurou 1000 Hz, também confirmados após outro ciclo de energia. Leituras inválidas de bateria foram descartadas antes das sequências estáveis, sem repetir gravações.
+- `mt760-dpi-write-20261103T000453855236Z.json`: aplicação WebHID de estágio inativo 1000→1050, persistente após ciclo. Recuperação nativa para 1000 e novo ciclo confirmaram a tabela original, 1200 DPI ativos e 1000 Hz. Um erro inicial do decoder de bateria após o último ciclo foi descartado; seus bytes não foram preservados.
+
+Procedimento de polling e correção do carregamento: [bancada de polling](../experiments/browser-polling-write.md).

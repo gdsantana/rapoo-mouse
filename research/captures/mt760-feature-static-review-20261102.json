@@ -1,0 +1,16 @@
+{
+  "sourceDllSha256": "afe024f101902e5193b59bad332835eb148af5a2ce5fada53280a07d91bc8513",
+  "imageBase": "0x6fd00000",
+  "featureReadExport": "0x6fd149d0",
+  "featureWrapper": "0x6fd0aeb0",
+  "featureWrapperCall": "0x6fd0af10",
+  "hidVtable": "0x6ffbf8d4",
+  "featureWrapperSlot": "0x74",
+  "mt760ReadDispatch": "0x6fd209c0",
+  "mt760InputSlot": "0x4c",
+  "inputWrapper": "0x6fd0ab90",
+  "inputReadCall": "0x6fd0abc9",
+  "chipTypeCandidate": 7,
+  "conclusion": "Feature API exists in DLL; inspected MT760 configuration dispatch selects Input, not Feature. No new Feature command inferred.",
+  "configurationWritesSent": false
+}
